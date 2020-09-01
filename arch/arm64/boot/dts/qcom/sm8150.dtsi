@@ -511,6 +511,14 @@
 		size = <0x0 0xA000000>;
 	};
 
+	memshare_mem: memshare_region {
+		compatible = "shared-dma-pool";
+		no-map;
+		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+		alignment = <0x0 0x100000>;
+		size = <0x0 0x800000>;
+	};
+
 	dump_mem: mem_dump_region {
 		compatible = "shared-dma-pool";
 		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
@@ -1822,6 +1830,7 @@
 		mem_client_3_size: qcom,client_3 {
 			compatible = "qcom,memshare-peripheral";
 			qcom,peripheral-size = <0x500000>;
+			memory-region = <&memshare_mem>;
 			qcom,client-id = <1>;
 			qcom,allocate-boot-time;
 			label = "modem";
