@@ -1178,7 +1178,7 @@ static const struct file_operations gpio_fileops = {
 
 static void gpiodevice_release(struct device *dev)
 {
-	struct gpio_device *gdev = dev_get_drvdata(dev);
+	struct gpio_device *gdev = container_of(dev, struct gpio_device, dev);
 
 	list_del(&gdev->list);
 	ida_simple_remove(&gpio_ida, gdev->id);
@@ -1301,7 +1301,6 @@ int gpiochip_add_data_with_key(struct gpio_chip *chip, void *data,
 	}
 	dev_set_name(&gdev->dev, "gpiochip%d", gdev->id);
 	device_initialize(&gdev->dev);
-	dev_set_drvdata(&gdev->dev, gdev);
 	if (chip->parent && chip->parent->driver)
 		gdev->owner = chip->parent->driver->owner;
 	else if (chip->owner)
