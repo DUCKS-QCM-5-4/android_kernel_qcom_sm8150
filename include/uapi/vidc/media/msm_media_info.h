@@ -1225,7 +1225,7 @@ invalid_input:
 static inline unsigned int VENUS_BUFFER_SIZE(unsigned int color_fmt,
 	unsigned int width, unsigned int height)
 {
-	unsigned int uv_alignment = 0, size = 0;
+	unsigned int size = 0;
 	unsigned int y_plane, uv_plane, y_stride,
 		uv_stride, y_sclines, uv_sclines;
 	unsigned int y_ubwc_plane = 0, uv_ubwc_plane = 0;
@@ -1252,9 +1252,8 @@ static inline unsigned int VENUS_BUFFER_SIZE(unsigned int color_fmt,
 	case COLOR_FMT_P010:
 	case COLOR_FMT_NV12_512:
 	case COLOR_FMT_NV12_128:
-		uv_alignment = 4096;
 		y_plane = y_stride * y_sclines;
-		uv_plane = uv_stride * uv_sclines + uv_alignment;
+		uv_plane = uv_stride * uv_sclines;
 		size = y_plane + uv_plane;
 		break;
 	case COLOR_FMT_NV12_UBWC:
