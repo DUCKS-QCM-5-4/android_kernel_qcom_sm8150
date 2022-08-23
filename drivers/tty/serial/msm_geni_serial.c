@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
+#include <linux/version.h>
 #include <linux/ioctl.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/dma-mapping.h>
@@ -106,7 +107,8 @@
 #define STALE_TIMEOUT		(16)
 #define STALE_COUNT		(DEFAULT_BITS_PER_CHAR * STALE_TIMEOUT)
 #define SEC_TO_USEC		(1000000)
-#define STALE_DELAY		(10000) //10msec
+#define SYSTEM_DELAY		(500) /* 500 usec */
+#define STALE_DELAY_MAX		(10000) /* 10 msec */
 #define DEFAULT_BITS_PER_CHAR	(10)
 #define GENI_UART_NR_PORTS	(6)
 #define GENI_UART_CONS_PORTS	(1)
@@ -1559,7 +1561,7 @@ static int stop_rx_sequencer(struct uart_port *uport)
 	struct msm_geni_serial_port *port = GET_DEV_PORT(uport);
 	unsigned long flags = 0;
 	bool is_rx_active;
-	u32 dma_rx_status, s_irq_status;
+	u32 dma_rx_status, s_irq_status, stale_delay;
 	int usage_count;
 
 	IPC_LOG_MSG(port->ipc_log_misc, "%s\n", __func__);
@@ -1575,12 +1577,23 @@ static int stop_rx_sequencer(struct uart_port *uport)
 
 	if (!uart_console(uport)) {
 		/*
-		 * Wait for the stale timeout around 10msec to happen
-		 * if there is any data pending in the rx fifo.
+		 * Wait for the stale timeout to happen if there is any data
+		 * pending in the rx fifo.
+		 * Have a safety factor of 2 to include the interrupt and
+		 * system latencies, add 500usec delay for interrupt latency
+		 * or system delay.
 		 * This will help to handle incoming rx data in stop_rx_sequencer
 		 * for interrupt latency or system delay cases.
 		 */
-		udelay(STALE_DELAY);
+		stale_delay = (STALE_COUNT * SEC_TO_USEC) / port->cur_baud;
+		stale_delay = (2 * stale_delay) + SYSTEM_DELAY;
+		if (stale_delay > STALE_DELAY_MAX)
+			stale_delay = STALE_DELAY_MAX;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+		UART_LOG_DBG(port->ipc_log_misc, uport->dev,
+			     "stale_delay = %d usecs\n", stale_delay);
+#endif
+		udelay(stale_delay);
 
 		dma_rx_status = geni_read_reg_nolog(uport->membase,
 						SE_DMA_RX_IRQ_STAT);
