@@ -369,7 +369,7 @@ int msm_vidc_qbuf(void *instance, struct media_device *mdev,
 	struct buf_queue *q = NULL;
 	s64 timestamp_us = 0;
 	u32 cr = 0;
-	struct v4l2_format *f;
+	struct v4l2_format *f = NULL;
 
 	if (!inst || !inst->core || !b || !valid_v4l2_buffer(b, inst)) {
 		d_vpr_e("%s: invalid params %pK %pK\n", __func__, inst, b);
@@ -478,6 +478,7 @@ int msm_vidc_dqbuf(void *instance, struct v4l2_buffer *b)
 	int rc = 0;
 	unsigned int i = 0;
 	struct buf_queue *q = NULL;
+	struct v4l2_format *f = NULL;
 
 	if (!inst || !b || !valid_v4l2_buffer(b, inst)) {
 		d_vpr_e("%s: invalid params, %pK %pK\n",
@@ -521,10 +522,12 @@ int msm_vidc_dqbuf(void *instance, struct v4l2_buffer *b)
 			return -EINVAL;
 		}
 	}
+
+	f = &inst->fmts[INPUT_PORT].v4l2_fmt;
 	if (is_decode_session(inst) &&
 		b->type == OUTPUT_MPLANE &&
 		!(b->flags & V4L2_BUF_FLAG_CODECCONFIG) &&
-		is_ts_reorder_allowed(inst))
+		(is_ts_reorder_allowed(inst) || f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_VP9))
 		msm_comm_fetch_ts_framerate(inst, b);
 
 	return rc;
