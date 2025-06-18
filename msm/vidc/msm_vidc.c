@@ -375,14 +375,9 @@ int msm_vidc_qbuf(void *instance, struct media_device *mdev,
 		d_vpr_e("%s: invalid params %pK %pK\n", __func__, inst, b);
 		return -EINVAL;
 	}
-	/*
-	 * As Video hardware demands the input/output buffers to be 256 bytes aligned,
-	 * remove 4K alignment check and add 256 byte alignment.
-	 */
-	if (!IS_ALIGNED(b->m.planes[0].length, SZ_256)) {
-		s_vpr_e(inst->sid, "qbuf: buffer size not 256 byte aligned - %u\n",
-			b->m.planes[0].length);
-		return -EINVAL;
+
+	if (!IS_ALIGNED(b->m.planes[0].length, SZ_4K)) {
+		b->m.planes[0].length = ALIGN(b->m.planes[0].length, SZ_4K);
 	}
 
 	q = msm_comm_get_vb2q(inst, b->type);
