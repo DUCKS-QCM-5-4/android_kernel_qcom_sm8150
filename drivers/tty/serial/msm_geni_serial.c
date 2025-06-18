@@ -224,6 +224,7 @@ struct msm_geni_serial_port {
 	struct msm_geni_serial_ver_info ver_info;
 	u32 cur_tx_remaining;
 	bool startup_in_progress;
+	bool shutdown_in_progress;
 	bool is_console;
 	bool rumi_platform;
 	bool m_cmd_done;
@@ -1554,6 +1555,11 @@ static void msm_geni_serial_set_manual_flow(bool enable,
 	}
 }
 
+static inline bool is_legacy_qup(struct msm_geni_serial_port *port)
+{
+	return (port->ver_info.hw_major_ver <= 1);
+}
+
 static int stop_rx_sequencer(struct uart_port *uport)
 {
 	unsigned int geni_status;
@@ -1612,7 +1618,7 @@ static int stop_rx_sequencer(struct uart_port *uport)
 			IPC_LOG_MSG(port->ipc_log_misc, "%s: Interrupt delay\n",
 					__func__);
 			handle_rx_dma_xfer(s_irq_status, uport);
-			if (!port->ioctl_count) {
+			if (!port->ioctl_count && !port->shutdown_in_progress) {
 				usage_count = atomic_read(&uport->dev->power.usage_count);
 				IPC_LOG_MSG(port->ipc_log_misc,
 					"%s: Abort Stop Rx, extend the PM timer, usage_count:%d\n",
@@ -2365,6 +2371,7 @@ static void msm_geni_serial_shutdown(struct uart_port *uport)
 	int ret;
 
 	IPC_LOG_MSG(msm_port->ipc_log_misc, "%s:\n", __func__);
+	msm_port->shutdown_in_progress = true;
 	/* Stop the console before stopping the current tx */
 	if (uart_console(uport)) {
 		console_stop(uport->cons);
@@ -2420,6 +2427,7 @@ static void msm_geni_serial_shutdown(struct uart_port *uport)
 		/* Reset UART error to default during port_close() */
 		msm_port->uart_error = UART_ERROR_DEFAULT;
 	}
+	msm_port->shutdown_in_progress = false;
 	IPC_LOG_MSG(msm_port->ipc_log_misc, "%s: End\n", __func__);
 }
 
@@ -3569,20 +3577,24 @@ static int msm_geni_serial_runtime_suspend(struct device *dev)
 	IPC_LOG_MSG(port->ipc_log_pwr, "%s: Start\n", __func__);
 	/* Flow off from UART only for In band sleep(IBS)
 	 * Avoid manual RFR FLOW ON for Out of band sleep(OBS).
+	 * Legacy QUPv3 (v1.x) handles flow control via HW sequencer;
+	 * avoid manual RFR manipulation
 	 */
-	if (port->wakeup_byte && port->wakeup_irq)
+	if (!is_legacy_qup(port) && port->wakeup_byte && port->wakeup_irq)
 		msm_geni_serial_set_manual_flow(false, port);
-	ret = wait_for_transfers_inflight(&port->uport);
-	if (ret) {
-		IPC_LOG_MSG(port->ipc_log_pwr,
-			     "%s: wait_for_transfer_inflight return ret:%d\n",
-			     __func__, ret);
-		/* Flow on from UART only for In band sleep(IBS)
-		 * Avoid manual RFR FLOW ON for Out of band sleep(OBS)
-		 */
-		if (port->wakeup_byte && port->wakeup_irq)
-			msm_geni_serial_allow_rx(port);
-		return -EBUSY;
+	if (!port->shutdown_in_progress) {
+		ret = wait_for_transfers_inflight(&port->uport);
+		if (ret) {
+			IPC_LOG_MSG(port->ipc_log_pwr,
+				     "%s: wait_for_transfer_inflight return ret:%d\n",
+				     __func__, ret);
+			/* Flow on from UART only for In band sleep(IBS)
+			 * Avoid manual RFR FLOW ON for Out of band sleep(OBS)
+			 */
+			if (!is_legacy_qup(port) && port->wakeup_byte && port->wakeup_irq)
+				msm_geni_serial_allow_rx(port);
+			return -EBUSY;
+		}
 	}
 	/*
 	 * Stop Rx.
@@ -3596,7 +3608,7 @@ static int msm_geni_serial_runtime_suspend(struct device *dev)
 		/* Flow on from UART only for In band sleep(IBS)
 		 * Avoid manual RFR FLOW ON for Out of band sleep(OBS)
 		 */
-		if (port->wakeup_byte && port->wakeup_irq)
+		if (!is_legacy_qup(port) && port->wakeup_byte && port->wakeup_irq)
 			msm_geni_serial_allow_rx(port);
 		return -EBUSY;
 	}
@@ -3608,12 +3620,20 @@ static int msm_geni_serial_runtime_suspend(struct device *dev)
 	disable_irq(port->uport.irq);
 
 	/*
+	 *Make sure wake up interrupt is enabled before RFR is made low
+	 */
+	if (port->wakeup_irq > 0) {
+		port->edge_count = 0;
+		enable_irq(port->wakeup_irq);
+	}
+
+	/*
 	 * Flow on from UART only for In band sleep(IBS)
 	 * Avoid manual RFR FLOW ON for Out of band sleep(OBS).
-	 * Above before stop_rx disabled the flow so we need to enable it here
-	 * Make sure wake up interrupt is enabled before RFR is made low
+	 * Above before stop_rx disabled the flow so we need to enable it here.
 	 */
-	if (port->wakeup_byte && port->wakeup_irq)
+	if (!is_legacy_qup(port) && port->wakeup_byte && port->wakeup_irq &&
+	    !port->shutdown_in_progress)
 		msm_geni_serial_allow_rx(port);
 
 	ret = se_geni_resources_off(&port->serial_rsc);
@@ -3623,10 +3643,6 @@ static int msm_geni_serial_runtime_suspend(struct device *dev)
 		goto exit_runtime_suspend;
 	}
 
-	if (port->wakeup_irq > 0) {
-		port->edge_count = 0;
-		enable_irq(port->wakeup_irq);
-	}
 	IPC_LOG_MSG(port->ipc_log_pwr, "%s: End\n", __func__);
 	__pm_relax(port->geni_wake);
 exit_runtime_suspend:
@@ -3660,7 +3676,8 @@ static int msm_geni_serial_runtime_resume(struct device *dev)
 		__pm_relax(port->geni_wake);
 		goto exit_runtime_resume;
 	}
-	start_rx_sequencer(&port->uport);
+	if (!port->shutdown_in_progress)
+		start_rx_sequencer(&port->uport);
 	/* Ensure that the Rx is running before enabling interrupts */
 	mb();
 	/* Enable interrupt */
