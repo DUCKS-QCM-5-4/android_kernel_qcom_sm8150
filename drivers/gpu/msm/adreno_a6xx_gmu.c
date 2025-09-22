@@ -2453,7 +2453,7 @@ static void a6xx_gmu_acd_probe(struct kgsl_device *device,
 	struct hfi_acd_table_cmd *cmd = &gmu->hfi.acd_table;
 	int ret, i, cmd_idx = 0;
 
-	if (!ADRENO_FEATURE(adreno_dev, ADRENO_ACD))
+	if ((!ADRENO_FEATURE(adreno_dev, ADRENO_ACD)) || (adreno_is_a640v2(adreno_dev)))
 		return;
 
 	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, sizeof(*cmd), HFI_MSG_CMD);
@@ -2479,6 +2479,50 @@ static void a6xx_gmu_acd_probe(struct kgsl_device *device,
 		return;
 
 	cmd->num_levels = cmd_idx;
+
+	ret = a6xx_gmu_aop_mailbox_init(adreno_dev, gmu);
+	if (ret)
+		dev_err(&gmu->pdev->dev,
+			"AOP mailbox init failed: %d\n", ret);
+}
+
+static void a6xx_gmu_acd_probe_legacy(struct kgsl_device *device,
+		struct a6xx_gmu_device *gmu, struct device_node *node)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrlevel *pwrlevel =
+			&pwr->pwrlevels[pwr->num_pwrlevels - 1];
+	struct hfi_acd_table_cmd *cmd = &gmu->hfi.acd_table;
+	int ret, i, cmd_idx = 0;
+
+	if (!ADRENO_FEATURE(adreno_dev, ADRENO_ACD))
+		return;
+
+	cmd->hdr = CREATE_MSG_HDR(H2F_MSG_ACD_TBL, sizeof(*cmd), HFI_MSG_CMD);
+
+	cmd->version = 1;
+	cmd->stride = 2;
+	cmd->enable_by_level = 0;
+
+	/*
+	 * Iterate through each gpu power level and generate a mask for GMU
+	 * firmware for ACD enabled levels and store the corresponding control
+	 * register configurations to the acd_table structure.
+	 */
+	for (i = 0; i < pwr->num_pwrlevels; i++) {
+		if (pwrlevel->acd_level_array[0] && pwrlevel->acd_level_array[1]) {
+			cmd->enable_by_level |= (1 << (i + 1));
+			cmd->data[cmd_idx++] = pwrlevel->acd_level_array[0];
+			cmd->data[cmd_idx++] = pwrlevel->acd_level_array[1];
+		}
+		pwrlevel--;
+	}
+
+	if (!cmd->enable_by_level)
+		return;
+
+	cmd->num_levels = cmd_idx/2;
 
 	ret = a6xx_gmu_aop_mailbox_init(adreno_dev, gmu);
 	if (ret)
@@ -2710,7 +2754,12 @@ int a6xx_gmu_probe(struct kgsl_device *device,
 	else
 		gmu->idle_level = GPU_HW_ACTIVE;
 
-	a6xx_gmu_acd_probe(device, gmu, pdev->dev.of_node);
+	if (of_property_read_bool(pdev->dev.of_node, "qcom,enable-legacy-acd-support")) {
+		dev_info(&gmu->pdev->dev, "Using legacy ACD array support\n");
+		a6xx_gmu_acd_probe_legacy(device, gmu, pdev->dev.of_node);
+	} else {
+		a6xx_gmu_acd_probe(device, gmu, pdev->dev.of_node);
+	}
 
 	set_bit(GMU_ENABLED, &device->gmu_core.flags);
 
