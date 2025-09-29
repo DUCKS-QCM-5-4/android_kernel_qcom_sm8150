@@ -10,25 +10,18 @@
  * GNU General Public License for more details.
  */
 
-#ifndef CAM_A5_SOC_H
-#define CAM_A5_SOC_H
+#ifndef _CAM_FD_DEV_H_
+#define _CAM_FD_DEV_H_
 
-#include "cam_soc_util.h"
+/**
+ * @brief : API to register FD Dev to platform framework.
+ * @return struct platform_device pointer on on success, or ERR_PTR() on error.
+ */
+int cam_fd_dev_init_module(void);
 
-#define ICP_UBWC_MAX 2
+/**
+ * @brief : API to remove FD Dev interface from platform framework.
+ */
+void cam_fd_dev_exit_module(void);
 
-struct a5_soc_info {
-	char *fw_name;
-	uint32_t ubwc_cfg[ICP_UBWC_MAX];
-};
-
-int cam_a5_init_soc_resources(struct cam_hw_soc_info *soc_info,
-	irq_handler_t a5_irq_handler, void *irq_data);
-
-void cam_a5_deinit_soc_resources(struct cam_hw_soc_info *soc_info);
-
-int cam_a5_enable_soc_resources(struct cam_hw_soc_info *soc_info);
-
-int cam_a5_disable_soc_resources(struct cam_hw_soc_info *soc_info);
-
-#endif
+#endif /* _CAM_FD_DEV_H_ */
