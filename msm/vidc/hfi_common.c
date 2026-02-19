@@ -4692,9 +4692,9 @@ static int venus_hfi_get_core_capabilities(void *dev)
 	return rc;
 }
 
-static int __noc_error_info_common(struct venus_hfi_device *device)
+static int __noc_error_info(struct venus_hfi_device *device, u32 core_num)
 {
-	u32 val = 0;
+	u32 vcodec_core_video_noc_base_offs, val = 0;
 	u32 sid = DEFAULT_SID;
 
 	if (!device) {
@@ -4702,43 +4702,67 @@ static int __noc_error_info_common(struct venus_hfi_device *device)
 		return 0;
 	}
 
+	if (!core_num) {
+		vcodec_core_video_noc_base_offs =
+			VCODEC_CORE0_VIDEO_NOC_BASE_OFFS;
+	} else if (core_num == 1) {
+		vcodec_core_video_noc_base_offs =
+			VCODEC_CORE1_VIDEO_NOC_BASE_OFFS;
+	} else {
+		d_vpr_e("%s: invalid core_num %u\n", __func__, core_num);
+		return 0;
+	}
+
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_SWID_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_SWID_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_SWID_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_SWID_HIGH:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_MAINCTL_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_MAINCTL_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_HIGH: %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_HIGH: %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_HIGH: %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_HIGH: %#x\n", core_num, val);
+
+	return 0;
+}
+
+static int __noc_error_info_common(struct venus_hfi_device *device)
+{
+	const u32 core0 = 0, core1 = 1;
+
 	if (__read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
 			VCODEC_CORE0_VIDEO_NOC_ERR_ERRVLD_LOW_OFFS,
-			DEFAULT_SID)) {
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_SWID_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_SWID_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_SWID_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_SWID_HIGH:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_MAINCTL_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_MAINCTL_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_HIGH: %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_HIGH: %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_HIGH: %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_HIGH: %#x\n", val);
-	}
+			DEFAULT_SID))
+		__noc_error_info(device, core0);
+
+	if (__read_register(device, VCODEC_CORE1_VIDEO_NOC_BASE_OFFS +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRVLD_LOW_OFFS,
+			DEFAULT_SID))
+		__noc_error_info(device, core1);
 
 	return 0;
 }
