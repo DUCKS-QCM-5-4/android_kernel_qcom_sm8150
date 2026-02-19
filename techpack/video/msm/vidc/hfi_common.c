@@ -71,6 +71,13 @@ static int __set_ubwc_config(struct venus_hfi_device *device);
 static bool __watchdog_common(u32 intr_status);
 static void __noc_error_info_common(struct venus_hfi_device *device);
 
+static void __power_off_common(struct venus_hfi_device *device);
+static int __prepare_pc_common(struct venus_hfi_device *device);
+static void __raise_interrupt_common(struct venus_hfi_device *device, u32 sid);
+static void __core_clear_interrupt_common(struct venus_hfi_device *device);
+static inline int __boot_firmware_common(
+		struct venus_hfi_device *device, u32 sid);
+
 struct venus_hfi_vpu_ops ar50_lite_ops = {
         .interrupt_init = __interrupt_init_ar50_lt,
         .setup_ucregion_memmap = __setup_ucregion_memory_map_ar50_lt,
@@ -83,6 +90,20 @@ struct venus_hfi_vpu_ops ar50_lite_ops = {
         .noc_error_info = __noc_error_info_common,
         .core_clear_interrupt = __core_clear_interrupt_ar50_lt,
         .boot_firmware = __boot_firmware_ar50_lt,
+};
+
+struct venus_hfi_vpu_ops iris1_ops = {
+	.interrupt_init = __interrupt_init_iris1,
+	.setup_ucregion_memmap = __setup_ucregion_memory_map_iris1,
+	.clock_config_on_enable = __clock_config_on_enable_iris1,
+	.reset_ahb2axi_bridge = __reset_ahb2axi_bridge_common,
+	.power_off = __power_off_common,
+	.prepare_pc = __prepare_pc_common,
+	.raise_interrupt = __raise_interrupt_common,
+	.watchdog = __watchdog_common,
+	.noc_error_info = __noc_error_info_common,
+	.core_clear_interrupt = __core_clear_interrupt_common,
+	.boot_firmware = __boot_firmware_common,
 };
 
 struct venus_hfi_vpu_ops iris2_ops = {
@@ -1053,6 +1074,34 @@ static int __tzbsp_set_video_state(enum tzbsp_video_state state, u32 sid)
 	return 0;
 }
 
+static inline int __boot_firmware_common(
+		struct venus_hfi_device *device, u32 sid)
+{
+	int rc = 0;
+	u32 ctrl_init_val = 0, ctrl_status = 0, count = 0, max_tries = 1000;
+
+	ctrl_init_val = BIT(0);
+
+	__write_register(device, CTRL_INIT, ctrl_init_val, sid);
+	while (!ctrl_status && count < max_tries) {
+		ctrl_status = __read_register(device, CTRL_STATUS, sid);
+		if ((ctrl_status & CTRL_ERROR_STATUS__M) == 0x4) {
+			s_vpr_e(sid, "invalid setting for UC_REGION\n");
+			break;
+		}
+
+		usleep_range(50, 100);
+		count++;
+	}
+
+	if (count >= max_tries) {
+		s_vpr_e(sid, "Error booting up vidc firmware\n");
+		rc = -ETIME;
+	}
+
+	return rc;
+}
+
 static int venus_hfi_suspend(void *dev)
 {
 	int rc = 0;
@@ -1273,6 +1322,12 @@ static int __iface_cmdq_write_relaxed(struct venus_hfi_device *device,
 err_q_write:
 err_q_null:
 	return result;
+}
+
+static void __raise_interrupt_common(struct venus_hfi_device *device, u32 sid)
+{
+	__write_register(device, CPU_IC_SOFTINT,
+				1 << CPU_IC_SOFTINT_H2A_SHFT, sid);
 }
 
 static int __iface_cmdq_write(struct venus_hfi_device *device,
@@ -1833,6 +1888,33 @@ static int venus_hfi_core_ping(void *device, u32 sid)
 err_create_pkt:
 	mutex_unlock(&dev->lock);
 	return rc;
+}
+
+static void __core_clear_interrupt_common(struct venus_hfi_device *device)
+{
+	u32 intr_status = 0, mask = 0;
+
+	if (!device) {
+		d_vpr_e("%s: NULL device\n", __func__);
+		return;
+	}
+
+	intr_status = __read_register(device, WRAPPER_INTR_STATUS, DEFAULT_SID);
+	mask = (WRAPPER_INTR_STATUS_A2H_BMSK |
+		WRAPPER_INTR_STATUS_A2HWD_BMSK |
+		CTRL_INIT_IDLE_MSG_BMSK);
+
+	if (intr_status & mask) {
+		device->intr_status |= intr_status;
+		device->reg_count++;
+		d_vpr_l("INTERRUPT: times: %d interrupt_status: %d\n",
+			device->reg_count, intr_status);
+	} else {
+		device->spur_count++;
+	}
+
+	__write_register(device, CPU_CS_A2HSOFTINTCLR, 1, DEFAULT_SID);
+	__write_register(device, WRAPPER_INTR_CLEAR, intr_status, DEFAULT_SID);
 }
 
 static int venus_hfi_core_trigger_ssr(void *device,
@@ -2566,6 +2648,59 @@ static void venus_hfi_pm_handler(struct work_struct *work)
 		d_vpr_e("%s: power collapse failed\n", __func__);
 		break;
 	}
+}
+
+static int __prepare_pc_common(struct venus_hfi_device *device)
+{
+	int rc = 0;
+	u32 wfi_status = 0, idle_status = 0, pc_ready = 0;
+	u32 ctrl_status = 0;
+	int count = 0;
+	const int max_tries = 10;
+
+	ctrl_status = __read_register(device, CTRL_STATUS, DEFAULT_SID);
+	pc_ready = ctrl_status & CTRL_STATUS_PC_READY;
+	idle_status = ctrl_status & BIT(30);
+
+	if (pc_ready) {
+		d_vpr_h("Already in pc_ready state\n");
+		return 0;
+	}
+
+	wfi_status = BIT(0) & __read_register(device,
+				WRAPPER_CPU_STATUS, DEFAULT_SID);
+	if (!wfi_status || !idle_status) {
+		d_vpr_e("Skipping PC, wfi status not set\n");
+		goto skip_power_off;
+	}
+
+	rc = __prepare_pc(device);
+	if (rc) {
+		d_vpr_e("Failed __prepare_pc %d\n", rc);
+		goto skip_power_off;
+	}
+
+	while (count < max_tries) {
+		wfi_status = BIT(0) & __read_register(device,
+					WRAPPER_CPU_STATUS, DEFAULT_SID);
+		ctrl_status = __read_register(device, CTRL_STATUS, DEFAULT_SID);
+		if (wfi_status && (ctrl_status & CTRL_STATUS_PC_READY))
+			break;
+		usleep_range(150, 250);
+		count++;
+	}
+
+	if (count == max_tries) {
+		d_vpr_e("Skip PC. Core is not in right state\n");
+		goto skip_power_off;
+	}
+
+	return rc;
+
+skip_power_off:
+	d_vpr_e("Skip PC, wfi=%#x, idle=%#x, pcr=%#x, ctrl=%#x)\n",
+		wfi_status, idle_status, pc_ready, ctrl_status);
+	return -EAGAIN;
 }
 
 static int __power_collapse(struct venus_hfi_device *device, bool force)
@@ -3844,6 +3979,27 @@ fail_vote_buses:
 	return rc;
 }
 
+static void __power_off_common(struct venus_hfi_device *device)
+{
+	if (!device->power_enabled)
+		return;
+
+	if (!(device->intr_status & WRAPPER_INTR_STATUS_A2HWD_BMSK))
+		disable_irq_nosync(device->hal_data->irq);
+	device->intr_status = 0;
+
+	__disable_unprepare_clks(device);
+	if (call_venus_op(device, reset_ahb2axi_bridge, device, DEFAULT_SID))
+		d_vpr_e("Failed to reset ahb2axi\n");
+
+	if (__disable_regulators(device))
+		d_vpr_e("Failed to disable regulators\n");
+
+	if (__unvote_buses(device, DEFAULT_SID))
+		d_vpr_e("Failed to unvote for buses\n");
+	device->power_enabled = false;
+}
+
 static inline int __suspend(struct venus_hfi_device *device)
 {
 	int rc = 0;
@@ -4102,9 +4258,9 @@ static int venus_hfi_get_core_capabilities(void *dev)
 	return rc;
 }
 
-static void __noc_error_info_common(struct venus_hfi_device *device)
+static void __noc_error_info(struct venus_hfi_device *device, u32 core_num)
 {
-	u32 val = 0;
+	u32 vcodec_core_video_noc_base_offs, val = 0;
 	u32 sid = DEFAULT_SID;
 
 	if (!device) {
@@ -4112,43 +4268,65 @@ static void __noc_error_info_common(struct venus_hfi_device *device)
 		return;
 	}
 
+	if (!core_num) {
+		vcodec_core_video_noc_base_offs =
+			VCODEC_CORE0_VIDEO_NOC_BASE_OFFS;
+	} else if (core_num == 1) {
+		vcodec_core_video_noc_base_offs =
+			VCODEC_CORE1_VIDEO_NOC_BASE_OFFS;
+	} else {
+		d_vpr_e("%s: invalid core_num %u\n", __func__, core_num);
+		return;
+	}
+
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_SWID_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_SWID_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_SWID_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_SWID_HIGH:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_MAINCTL_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_MAINCTL_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_HIGH: %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_HIGH: %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_HIGH: %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_LOW_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_LOW:  %#x\n", core_num, val);
+	val = __read_register(device, vcodec_core_video_noc_base_offs +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_HIGH_OFFS, sid);
+	d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_HIGH: %#x\n", core_num, val);
+}
+
+static void __noc_error_info_common(struct venus_hfi_device *device)
+{
+	const u32 core0 = 0, core1 = 1;
+
 	if (__read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
 			VCODEC_CORE0_VIDEO_NOC_ERR_ERRVLD_LOW_OFFS,
-			DEFAULT_SID)) {
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_SWID_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_SWID_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_SWID_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_SWID_HIGH:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_MAINCTL_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_MAINCTL_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG0_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG0_HIGH: %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG1_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG1_HIGH: %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG2_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG2_HIGH: %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_LOW_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_LOW:  %#x\n", val);
-		val = __read_register(device, VCODEC_CORE0_VIDEO_NOC_BASE_OFFS +
-				VCODEC_CORE0_VIDEO_NOC_ERR_ERRLOG3_HIGH_OFFS, sid);
-		d_vpr_e("VCODEC_NOC_ERR_ERRLOG3_HIGH: %#x\n", val);
-	}
+			DEFAULT_SID))
+		__noc_error_info(device, core0);
+
+	if (__read_register(device, VCODEC_CORE1_VIDEO_NOC_BASE_OFFS +
+			VCODEC_CORE0_VIDEO_NOC_ERR_ERRVLD_LOW_OFFS,
+			DEFAULT_SID))
+		__noc_error_info(device, core1);
 }
 
 static int venus_hfi_noc_error_info(void *dev)
@@ -4195,6 +4373,8 @@ void __init_venus_ops(struct venus_hfi_device *device)
 {
 	if (device->res->vpu_ver == VPU_VERSION_AR50_LITE)
 		device->vpu_ops = &ar50_lite_ops;
+	else if (device->res->vpu_ver == VPU_VERSION_IRIS1)
+		device->vpu_ops = &iris1_ops;
 	else
 		device->vpu_ops = &iris2_ops;
 }

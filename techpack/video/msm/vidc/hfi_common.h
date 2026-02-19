@@ -288,6 +288,18 @@ int venus_hfi_initialize(struct hfi_device *hdev, u32 device_id,
 		struct msm_vidc_platform_resources *res,
 		hfi_cmd_response_callback callback);
 
+/* IRIS1 specific */
+struct lut const *__lut_iris1(int width, int height, int fps);
+fp_t __compression_ratio_iris1(struct lut const *entry, int bpp);
+void __dump_iris1(struct dump dump[], int len, u32 sid);
+void __interrupt_init_iris1(struct venus_hfi_device *device, u32 sid);
+void __setup_dsp_uc_memmap_iris1(struct venus_hfi_device *device);
+void __clock_config_on_enable_iris1(struct venus_hfi_device *device,
+		u32 sid);
+void __setup_ucregion_memory_map_iris1(struct venus_hfi_device *device,
+		u32 sid);
+
+/* IRIS2 specific */
 struct lut const *__lut(int width, int height, int fps);
 fp_t __compression_ratio(struct lut const *entry, int bpp);
 void __dump(struct dump dump[], int len, u32 sid);
