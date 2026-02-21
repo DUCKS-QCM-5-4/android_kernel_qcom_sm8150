@@ -3601,6 +3601,11 @@ int msm_venc_set_bitrate_boost_margin(struct msm_vidc_inst *inst, u32 enable)
 	hdev = inst->core->device;
 	vpu = inst->core->platform_data->vpu_ver;
 
+	if (vpu == VPU_VERSION_IRIS1) {
+		boost_margin.margin = 0;
+		return rc;
+	}
+
 	if (!enable) {
 		boost_margin.margin = 0;
 		goto setprop;
@@ -3645,7 +3650,6 @@ setprop:
 
 	return rc;
 }
-
 
 int msm_venc_set_loop_filter_mode(struct msm_vidc_inst *inst)
 {
