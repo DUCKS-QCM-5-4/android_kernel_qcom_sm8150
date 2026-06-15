@@ -9,7 +9,7 @@
 #include "msm_vidc_debug.h"
 #include "vidc_hfi_api.h"
 
-int msm_vidc_debug = VIDC_ERR | VIDC_PRINTK |
+int msm_vidc_debug = VIDC_ERR | FW_PRINTK | VIDC_PRINTK |
 	FW_ERROR | FW_FATAL | FW_FTRACE;
 EXPORT_SYMBOL(msm_vidc_debug);
 
