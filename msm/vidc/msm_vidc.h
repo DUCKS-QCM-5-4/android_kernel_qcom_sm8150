@@ -8,8 +8,8 @@
 
 #include <linux/videodev2.h>
 #include <linux/msm_ion.h>
-#include "vidc/media/msm_vidc_private.h"
-#include "vidc/media/msm_vidc_utils.h"
+#include "vidc_gen3meta/media/msm_vidc_private.h"
+#include "vidc_gen3meta/media/msm_vidc_utils.h"
 #include <media/media-device.h>
 
 #define HAL_BUFFER_MAX 0xe

@@ -6,7 +6,7 @@
 #ifndef __H_VIDC_HFI_HELPER_H__
 #define __H_VIDC_HFI_HELPER_H__
 
-#include "vidc/media/msm_vidc_utils.h"
+#include "vidc_gen3meta/media/msm_vidc_utils.h"
 
 #define HFI_COMMON_BASE				(0)
 #define HFI_OX_BASE					(0x01000000)
