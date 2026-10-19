@@ -1340,6 +1340,7 @@ int hfi_process_msg_packet(u32 device_id, struct vidc_hal_msg_pkt_hdr *msg_hdr,
 		break;
 	case HFI_MSG_SESSION_SYNC_DONE:
 		pkt_func = (pkt_func_def)hfi_process_ignore;
+		break;
 	case HFI_MSG_SYS_PING_ACK:
 		pkt_func = (pkt_func_def)hfi_process_sys_ping_ack;
 		break;

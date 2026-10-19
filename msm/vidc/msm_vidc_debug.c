@@ -681,6 +681,7 @@ inline void update_log_ctxt(u32 sid, u32 session_type, u32 fourcc)
 	case MSM_VIDC_CVP:
 		type = 'c';
 		s_type = VIDC_CVP;
+		break;
 	default:
 		type = '.';
 		break;
