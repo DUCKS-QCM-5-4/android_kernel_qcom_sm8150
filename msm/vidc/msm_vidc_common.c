@@ -3137,15 +3137,10 @@ static int msm_comm_init_core(struct msm_vidc_inst *inst)
 	core->smmu_fault_handled = false;
 	core->trigger_ssr = false;
 	core->pm_suspended = false;
-	core->resources.max_secure_encoder_inst_count =
-		core->resources.max_secure_encoder_inst_count ?
-		core->resources.max_secure_encoder_inst_count :
+	core->resources.max_secure_inst_count =
+		core->resources.max_secure_inst_count ?
+		core->resources.max_secure_inst_count :
 		core->resources.max_inst_count;
-	core->resources.max_secure_decoder_inst_count =
-                core->resources.max_secure_decoder_inst_count ?
-                core->resources.max_secure_decoder_inst_count :
-                core->resources.max_inst_count;
-
 	s_vpr_h(inst->sid, "%s: codecs count %d, max inst count %d\n",
 		__func__, core->resources.codecs_count,
 		core->resources.max_inst_count);
@@ -7654,38 +7649,26 @@ int msm_comm_set_cvp_skip_ratio(struct msm_vidc_inst *inst,
 bool msm_comm_check_for_inst_overload(struct msm_vidc_core *core)
 {
 	u32 instance_count = 0;
-	u32 secure_decoder_instance_count = 0;
-	u32 secure_encoder_instance_count = 0;
+	u32 secure_instance_count = 0;
 	struct msm_vidc_inst *inst = NULL;
 	bool overload = false;
-
 
 	mutex_lock(&core->lock);
 	list_for_each_entry(inst, &core->instances, list) {
 		instance_count++;
-		if (inst->session_type == MSM_VIDC_ENCODER &&
-		   inst->flags & VIDC_SECURE) {
-			secure_encoder_instance_count++;
-			/* checking max instance count for secure encoder */
-
-		} else if (inst->session_type == MSM_VIDC_DECODER &&
-			  inst->flags & VIDC_SECURE) {
-			secure_decoder_instance_count++;
-			/* checking max instance count for secure decoder */
-		}
+		if (inst->flags & VIDC_SECURE)
+			secure_instance_count++;
 	}
 	mutex_unlock(&core->lock);
+
 	if (instance_count > core->resources.max_inst_count ||
-	    secure_decoder_instance_count > core->resources.max_secure_decoder_inst_count ||
-	    secure_encoder_instance_count > core->resources.max_secure_encoder_inst_count) {
+		secure_instance_count > core->resources.max_secure_inst_count) {
 		overload = true;
-		d_vpr_e("%s: inst_count:%u max_inst:%u sec_inst_count:%u max_sec_inst:%u \
-			sec_enc_inst_count:%u max_sec_enc_inst:%u\n",
-			__func__, instance_count,core->resources.max_inst_count,
-			secure_decoder_instance_count,
-			core->resources.max_secure_decoder_inst_count,
-			secure_encoder_instance_count,
-			core->resources.max_secure_encoder_inst_count);
+		d_vpr_e(
+			"%s: inst_count:%u max_inst:%u sec_inst_count:%u max_sec_inst:%u\n",
+			__func__, instance_count,
+			core->resources.max_inst_count, secure_instance_count,
+			core->resources.max_secure_inst_count);
 	}
 	return overload;
 }

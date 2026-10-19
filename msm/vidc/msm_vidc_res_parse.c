@@ -794,11 +794,8 @@ int read_platform_resources_from_drv_data(
 	res->debug_timeout = find_key_value(platform_data,
 			"qcom,debug-timeout");
 
-	res->max_secure_decoder_inst_count = find_key_value(platform_data,
-			"qcom,max-secure-decoder-instances");
-
-	res->max_secure_encoder_inst_count = find_key_value(platform_data,
-                        "qcom,max-secure-encoder-instances");
+	res->max_secure_inst_count = find_key_value(platform_data,
+			"qcom,max-secure-instances");
 
 	res->prefetch_pix_buf_count = find_key_value(platform_data,
 			"qcom,prefetch_pix_buf_count");

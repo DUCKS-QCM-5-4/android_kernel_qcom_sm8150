@@ -1746,17 +1746,10 @@ int msm_venc_s_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 		inst->flags &= ~VIDC_SECURE;
 		if (ctrl->val)
 			inst->flags |= VIDC_SECURE;
-		if (msm_comm_check_for_inst_overload(inst->core)) {
-                        s_vpr_e(inst->sid,
-                                "%s: Instance count reached Max limit, rejecting session",
-                                __func__);
-                        rc = -ENOTSUPP;
-                } else {
-			f = &inst->fmts[INPUT_PORT].v4l2_fmt;
-			f->fmt.pix_mp.num_planes = 1;
-			s_vpr_h(sid, "%s: num planes %d for secure sessions\n",
+		f = &inst->fmts[INPUT_PORT].v4l2_fmt;
+		f->fmt.pix_mp.num_planes = 1;
+		s_vpr_h(sid, "%s: num planes %d for secure sessions\n",
 					__func__, f->fmt.pix_mp.num_planes);
-		}
 		break;
 	case V4L2_CID_MPEG_VIDC_VIDEO_USELTRFRAME:
 		if (inst->state == MSM_VIDC_START_DONE) {

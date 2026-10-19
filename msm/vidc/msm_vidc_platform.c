@@ -2498,7 +2498,7 @@ static struct msm_vidc_common_data sm8150_common_data[] = {
 		.value = 1,
 	},
 	{
-		.key = "qcom,max-secure-decoder-instances",
+		.key = "qcom,max-secure-instances",
 		.value = 3,             /*
 					 * As per design driver allows 3rd
 					 * instance as well since the secure
@@ -2509,10 +2509,6 @@ static struct msm_vidc_common_data sm8150_common_data[] = {
 					 */
 	},
 	{
-                .key = "qcom,max-secure-encoder-instances",
-                .value = 1,
-        },
-        {
 		.key = "qcom,max-hw-load",
 		.value = 3916800, /* ((1920x1088)/256)@480fps */
 	},

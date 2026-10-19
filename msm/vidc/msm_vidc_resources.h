@@ -176,8 +176,7 @@ struct msm_vidc_platform_resources {
 	bool never_unload_fw;
 	bool debug_timeout;
 	uint32_t max_inst_count;
-	uint32_t max_secure_decoder_inst_count;
-	uint32_t max_secure_encoder_inst_count;
+	uint32_t max_secure_inst_count;
 	uint32_t prefetch_pix_buf_count;
 	uint32_t prefetch_pix_buf_size;
 	uint32_t prefetch_non_pix_buf_count;
