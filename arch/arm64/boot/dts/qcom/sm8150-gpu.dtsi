@@ -257,6 +257,8 @@
 		interrupts = <GIC_SPI 304 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 305 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "kgsl_hfi_irq", "kgsl_gmu_irq";
 
+		qcom,enable-legacy-acd-support;
+
 		regulator-names = "vddcx", "vdd";
 
 		iommus = <&kgsl_smmu 0x5 0x400>;
