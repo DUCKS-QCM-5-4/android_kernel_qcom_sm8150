@@ -214,8 +214,9 @@
 #define GCC_VIDEO_XO_CLK					196
 #define GPLL0							197
 #define GPLL0_OUT_EVEN						198
-#define GPLL7							199
-#define GPLL9							200
+#define GPLL4							199
+#define GPLL7							200
+#define GPLL9							201
 
 /* Reset clocks */
 #define GCC_EMAC_BCR						0
