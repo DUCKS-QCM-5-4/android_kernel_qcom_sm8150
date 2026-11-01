@@ -1275,9 +1275,9 @@ static struct msm_vidc_codec_capability sm8150_capabilities[] = {
 static struct msm_vidc_codec_capability sm6150_capabilities[] = {
 	/* {cap_type, domains, codecs, min, max, step_size, default_value} */
 	{CAP_FRAME_WIDTH, DEC, CODECS_ALL, 96, 4096, 1, 1920},
-	{CAP_FRAME_HEIGHT, DEC, CODECS_ALL, 96, 2176, 1, 1080},
+	{CAP_FRAME_HEIGHT, DEC, CODECS_ALL, 96, 4096, 1, 1080},
 	{CAP_FRAME_WIDTH, ENC, CODECS_ALL, 96, 4096, 2, 1920},
-	{CAP_FRAME_HEIGHT, ENC, CODECS_ALL, 96, 2160, 2, 1080},
+	{CAP_FRAME_HEIGHT, ENC, CODECS_ALL, 96, 4096, 2, 1080},
 	/*  ((4096 * 2176) / 256) */
 	{CAP_MBS_PER_FRAME, DEC, CODECS_ALL, 36, 34816, 1, 8160},
 	{CAP_MBS_PER_FRAME, ENC, CODECS_ALL, 36, 34816, 1, 8160},
@@ -1311,7 +1311,7 @@ static struct msm_vidc_codec_capability sm6150_capabilities[] = {
 
 	/* VP8 specific */
 	{CAP_FRAME_WIDTH, ENC|DEC, VP8, 96, 4096, 1, 4096},
-	{CAP_FRAME_HEIGHT, ENC|DEC, VP8, 96, 2304, 1, 2304},
+	{CAP_FRAME_HEIGHT, ENC|DEC, VP8, 96, 4096, 1, 2304},
 	/* (4096 * 2304) / 256 */
 	{CAP_MBS_PER_FRAME, ENC|DEC, VP8, 36, 36864, 1, 36864},
 	/* ((1920 * 1088) / 256) * 120*/
@@ -1322,7 +1322,7 @@ static struct msm_vidc_codec_capability sm6150_capabilities[] = {
 
 	/* Mpeg2 decoder specific */
 	{CAP_FRAME_WIDTH, DEC, MPEG2, 96, 1920, 1, 1920},
-	{CAP_FRAME_HEIGHT, DEC, MPEG2, 96, 1088, 1, 1088},
+	{CAP_FRAME_HEIGHT, DEC, MPEG2, 96, 1920, 1, 1088},
 	/* (1920 * 1088) / 256 */
 	{CAP_MBS_PER_FRAME, DEC, MPEG2, 36, 8160, 1, 8160},
 	/* ((1920 * 1088) / 256) * 30*/
@@ -1332,9 +1332,9 @@ static struct msm_vidc_codec_capability sm6150_capabilities[] = {
 
 	/* Secure usecase specific */
 	{CAP_SECURE_FRAME_WIDTH, DEC, CODECS_ALL, 96, 3840, 1, 1920},
-	{CAP_SECURE_FRAME_HEIGHT, DEC, CODECS_ALL, 96, 2160, 1, 1080},
+	{CAP_SECURE_FRAME_HEIGHT, DEC, CODECS_ALL, 96, 3840, 1, 1080},
 	{CAP_SECURE_FRAME_WIDTH, ENC, CODECS_ALL, 96, 3840, 2, 1920},
-	{CAP_SECURE_FRAME_HEIGHT, ENC, CODECS_ALL, 96, 2160, 2, 1080},
+	{CAP_SECURE_FRAME_HEIGHT, ENC, CODECS_ALL, 96, 3840, 2, 1080},
         /* (3840 * 2176) / 256 */
 	{CAP_SECURE_MBS_PER_FRAME, DOMAINS_ALL, CODECS_ALL, 36, 32640, 1, 8160},
 	{CAP_SECURE_BITRATE, DOMAINS_ALL, CODECS_ALL, 1, 40000000, 1, 20000000},
