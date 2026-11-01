@@ -1189,6 +1189,16 @@ static struct msm_vidc_codec_capability sm8150_capabilities[] = {
 	{CAP_SLICE_MB, ENC, H264|HEVC, 1, 10, 1, 10},
 	{CAP_MAX_VIDEOCORES, DOMAINS_ALL, CODECS_ALL, 0, 1, 1, 1},
 
+	/* VP9 decoder-specific */
+	{CAP_FRAME_WIDTH, DEC, VP9, 96, 4096, 1, 1920},
+	{CAP_FRAME_HEIGHT, DEC, VP9, 96, 4096, 1, 1080},
+	/* (4096 * 2304) / 256 */
+	{CAP_MBS_PER_FRAME, DEC, VP9, 36, 36864, 1, 36864},
+	/* ((4096 * 2304) / 256) * 60 = 2211840 is well below 3916800 */
+	{CAP_MBS_PER_SECOND, DEC, VP9, 36, 2211840, 1, 2211840},
+	{CAP_FRAMERATE, DEC, VP9, 1, 60, 1, 60},
+	{CAP_BITRATE, DEC, VP9, 1, 100000000, 1, 20000000},
+
 	/* VP8 specific */
 	{CAP_FRAME_WIDTH, ENC|DEC, VP8, 96, 4096, 1, 4096},
 	{CAP_FRAME_HEIGHT, ENC|DEC, VP8, 96, 4096, 1, 2304},
