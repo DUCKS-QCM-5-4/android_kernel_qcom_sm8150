@@ -15,7 +15,6 @@
 #include <linux/platform_device.h>
 #include <linux/iio/consumer.h>
 #include <linux/qpnp/qpnp-pbs.h>
-#include <linux/qpnp/qpnp-revid.h>
 #include <linux/thermal.h>
 #include "fg-core.h"
 #include "fg-reg.h"
@@ -5439,47 +5438,28 @@ static void fg_gen4_parse_cl_params_dt(struct fg_gen4_chip *chip)
 		&chip->cl->dt.ibat_flt_thr_ma);
 }
 
-static int fg_gen4_parse_revid_dt(struct fg_gen4_chip *chip)
+static int fg_gen4_chip_config_init(struct fg_gen4_chip *chip)
 {
 	struct fg_dev *fg = &chip->fg;
-	struct device_node *revid_node, *node = fg->dev->of_node;
+	int subtype = (unsigned long)of_device_get_match_data(fg->dev);
 
-	revid_node = of_parse_phandle(node, "qcom,pmic-revid", 0);
-	if (!revid_node) {
-		pr_err("Missing qcom,pmic-revid property - driver failed\n");
-		return -EINVAL;
-	}
-
-	fg->pmic_rev_id = get_revid_data(revid_node);
-	of_node_put(revid_node);
-	if (IS_ERR_OR_NULL(fg->pmic_rev_id)) {
-		pr_err("Unable to get pmic_revid rc=%ld\n",
-			PTR_ERR(fg->pmic_rev_id));
-		/*
-		 * the revid peripheral must be registered, any failure
-		 * here only indicates that the rev-id module has not
-		 * probed yet.
-		 */
-		return -EPROBE_DEFER;
-	}
-
-	pr_debug("PMIC subtype %d Digital major %d\n",
-		fg->pmic_rev_id->pmic_subtype, fg->pmic_rev_id->rev4);
-
-	switch (fg->pmic_rev_id->pmic_subtype) {
-	case PM8150B_SUBTYPE:
+	pr_debug("PMIC subtype is %d\n", subtype);
+	switch (subtype) {
+	case PM8150B_V1:
+		fg->version = GEN4_FG;
+		fg->use_dma = true;
+		fg->sp = pm8150b_v1_sram_params;
+		fg->wa_flags |= PM8150B_V1_DMA_WA;
+		fg->wa_flags |= PM8150B_V1_RSLOW_COMP_WA;
+		break;
+	case PM8150B_V2:
 		fg->version = GEN4_FG;
 		fg->use_dma = true;
 		fg->sp = pm8150b_v2_sram_params;
-		if (fg->pmic_rev_id->rev4 == PM8150B_V1P0_REV4) {
-			fg->sp = pm8150b_v1_sram_params;
-			fg->wa_flags |= PM8150B_V1_DMA_WA;
-			fg->wa_flags |= PM8150B_V1_RSLOW_COMP_WA;
-		} else if (fg->pmic_rev_id->rev4 == PM8150B_V2P0_REV4) {
-			fg->wa_flags |= PM8150B_V2_RSLOW_SCALE_FN_WA;
-		}
+		fg->wa_flags |= PM8150B_V2_RSLOW_SCALE_FN_WA;
 		break;
 	default:
+		pr_err("PMIC subtype %d not supported\n", subtype);
 		return -EINVAL;
 	}
 
@@ -5561,7 +5541,7 @@ static int fg_gen4_parse_dt(struct fg_gen4_chip *chip)
 		return -ENXIO;
 	}
 
-	rc = fg_gen4_parse_revid_dt(chip);
+	rc = fg_gen4_chip_config_init(chip);
 	if (rc < 0)
 		return rc;
 
@@ -6439,7 +6419,14 @@ static const struct dev_pm_ops fg_gen4_pm_ops = {
 };
 
 static const struct of_device_id fg_gen4_match_table[] = {
-	{.compatible = FG_GEN4_DEV_NAME},
+	{
+		.compatible = "qcom,pm8150b-v2-fg-gen4",
+		.data = (void *)PM8150B_V2,
+	},
+	{
+		.compatible = "qcom,pm8150b-v1-fg-gen4",
+		.data = (void *)PM8150B_V1,
+	},
 	{},
 };
 

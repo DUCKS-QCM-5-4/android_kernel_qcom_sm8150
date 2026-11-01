@@ -429,7 +429,6 @@ struct fg_memif {
 struct fg_dev {
 	struct thermal_zone_device	*tz_dev;
 	struct device		*dev;
-	struct pmic_revid_data	*pmic_rev_id;
 	struct regmap		*regmap;
 	struct dentry		*dfs_root;
 	struct power_supply	*fg_psy;
@@ -657,6 +656,8 @@ struct fg_gen3_chip {
 	bool			esr_fcc_ctrl_en;
 	bool			esr_flt_cold_temp_en;
 	bool			slope_limit_en;
+	int				pmic_subtype;
+
 };
 
 struct fg_gen4_chip {
@@ -755,11 +756,16 @@ struct fg_dbgfs {
 	u32				addr;
 };
 
-enum pmic_type {
-	PMI8998,
+enum fg_gen3_pmic_type {
+	PMI8998_V1,
+	PMI8998_V2,
 	PM660,
 };
 
+enum fg_gen4_pmic_type {
+	PM8150B_V1,
+	PM8150B_V2,
+};
 
 extern int fg_decode_voltage_24b(struct fg_sram_param *sp,
 	enum fg_sram_param_id id, int val);

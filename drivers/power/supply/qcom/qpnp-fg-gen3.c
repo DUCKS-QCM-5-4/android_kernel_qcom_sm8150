@@ -13,7 +13,6 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/iio/consumer.h>
-#include <linux/qpnp/qpnp-revid.h>
 #include <linux/qpnp/qpnp-misc.h>
 #include <dt-bindings/iio/qti_power_supply_iio.h>
 #include "battery-profile-loader.h"
@@ -4127,7 +4126,7 @@ static int fg_hw_init(struct fg_dev *fg)
 		return rc;
 	}
 
-	if (fg->pmic_rev_id->pmic_subtype == PMI8998_SUBTYPE) {
+	if (chip->pmic_subtype == PMI8998_V2 || chip->pmic_subtype == PMI8998_V1) {
 		chip->esr_timer_charging_default[TIMER_RETRY] =
 			DEFAULT_ESR_CHG_TIMER_RETRY;
 		chip->esr_timer_charging_default[TIMER_MAX] =
@@ -4852,7 +4851,7 @@ static int fg_gen3_init_iio_psy(struct fg_gen3_chip *chip,
 static int fg_parse_dt(struct fg_gen3_chip *chip)
 {
 	struct fg_dev *fg = &chip->fg;
-	struct device_node *child, *revid_node, *node = fg->dev->of_node;
+	struct device_node *child, *node = fg->dev->of_node;
 	u32 base, temp;
 	u8 subtype;
 	int rc;
@@ -4862,51 +4861,31 @@ static int fg_parse_dt(struct fg_gen3_chip *chip)
 		return -ENXIO;
 	}
 
-	revid_node = of_parse_phandle(node, "qcom,pmic-revid", 0);
-	if (!revid_node) {
-		pr_err("Missing qcom,pmic-revid property - driver failed\n");
-		return -EINVAL;
-	}
-
-	fg->pmic_rev_id = get_revid_data(revid_node);
-	if (IS_ERR_OR_NULL(fg->pmic_rev_id)) {
-		pr_err("Unable to get pmic_revid rc=%ld\n",
-			PTR_ERR(fg->pmic_rev_id));
-		/*
-		 * the revid peripheral must be registered, any failure
-		 * here only indicates that the rev-id module has not
-		 * probed yet.
-		 */
-		return -EPROBE_DEFER;
-	}
-
-	pr_debug("PMIC subtype %d Digital major %d\n",
-		fg->pmic_rev_id->pmic_subtype, fg->pmic_rev_id->rev4);
-
-	switch (fg->pmic_rev_id->pmic_subtype) {
-	case PMI8998_SUBTYPE:
+	chip->pmic_subtype = (unsigned long)of_device_get_match_data(fg->dev);
+	pr_debug("PMIC subtype is %d\n", chip->pmic_subtype);
+	switch (chip->pmic_subtype) {
+	case PMI8998_V1:
 		fg->version = GEN3_FG;
 		fg->use_dma = true;
-		if (fg->pmic_rev_id->rev4 < PMI8998_V2P0_REV4) {
-			fg->sp = pmi8998_v1_sram_params;
-			fg->alg_flags = pmi8998_v1_alg_flags;
-			fg->wa_flags |= PMI8998_V1_REV_WA;
-		} else if (fg->pmic_rev_id->rev4 == PMI8998_V2P0_REV4) {
-			fg->sp = pmi8998_v2_sram_params;
-			fg->alg_flags = pmi8998_v2_alg_flags;
-		} else {
-			return -EINVAL;
-		}
+		fg->sp = pmi8998_v1_sram_params;
+		fg->alg_flags = pmi8998_v1_alg_flags;
+		fg->wa_flags |= PMI8998_V1_REV_WA;
 		break;
-	case PM660_SUBTYPE:
+	case PMI8998_V2:
+		fg->version = GEN3_FG;
+		fg->use_dma = true;
+		fg->sp = pmi8998_v2_sram_params;
+		fg->alg_flags = pmi8998_v2_alg_flags;
+		break;
+	case PM660:
 		fg->version = GEN3_FG;
 		fg->sp = pmi8998_v2_sram_params;
 		fg->alg_flags = pmi8998_v2_alg_flags;
 		fg->use_ima_single_mode = true;
-		if (fg->pmic_rev_id->fab_id == PM660_FAB_ID_TSMC)
-			fg->wa_flags |= PM660_TSMC_OSC_WA;
+		fg->wa_flags |= PM660_TSMC_OSC_WA;
 		break;
 	default:
+		pr_err("PMIC subtype %d not supported\n", chip->pmic_subtype);
 		return -EINVAL;
 	}
 
@@ -5632,7 +5611,10 @@ static void fg_gen3_shutdown(struct platform_device *pdev)
 
 static const struct of_device_id fg_gen3_match_table[] = {
 	{ .compatible = "qcom,pmi8998-fg-gen3",
-	  .data = (void *)PMI8998,
+	  .data = (void *)PMI8998_V2,
+	},
+	{ .compatible = "qcom,pmi8998-v1-fg-gen3",
+	  .data = (void *)PMI8998_V1,
 	},
 	{ .compatible = "qcom,pm660-fg-gen3",
 	  .data = (void *)PM660,
