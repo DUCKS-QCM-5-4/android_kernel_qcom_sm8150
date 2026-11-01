@@ -167,8 +167,6 @@
 			#cooling-cells = <2>;
 			#io-channel-cells = <1>;
 
-			qcom,pmic-revid = <&pm8150b_revid>;
-
 			io-channels = <&pm8150b_vadc ADC5_MID_CHG_DIV6>,
 					<&pm8150b_vadc ADC5_USB_IN_V_16>,
 					<&pm8150b_vadc ADC5_CHG_TEMP>,
@@ -449,7 +447,6 @@
 			compatible = "qcom,pm8150b-v2-fg-gen4";
 			#address-cells = <1>;
 			#size-cells = <1>;
-			qcom,pmic-revid = <&pm8150b_revid>;
 			qcom,pmic-pbs = <&pm8150b_pbs1>;
 			status = "okay";
 			#io-channel-cells = <1>;

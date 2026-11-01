@@ -28,6 +28,7 @@
 		pm8150l_revid: qcom,revid@100 {
 			compatible = "qcom,qpnp-revid";
 			reg = <0x100>;
+			status = "disabled";
 		};
 
 		qcom,power-on@800 {
@@ -134,7 +135,6 @@
 			reg = <0xec00>;
 			interrupts = <0x5 0xec 0x1 IRQ_TYPE_EDGE_RISING>;
 			interrupt-names = "sc-irq";
-			qcom,pmic-revid = <&pm8150l_revid>;
 			qcom,voltage-step-ramp;
 			status = "disabled";
 
@@ -178,7 +178,6 @@
 			qcom,thermal-derate-en;
 			qcom,thermal-derate-current = <200 500 1000>;
 			qcom,isc-delay = <192>;
-			qcom,pmic-revid = <&pm8150l_revid>;
 
 			io-channels = <&pm8150b_fg PSY_IIO_RESISTANCE>,
 					<&pm8150b_fg PSY_IIO_VOLTAGE_OCV>,
@@ -300,7 +299,6 @@
 				     <0x5 0xd8 0x5 IRQ_TYPE_EDGE_BOTH>;
 			interrupt-names = "ovp-irq", "pre-flash-irq",
 					  "flash-irq";
-			qcom,pmic-revid = <&pm8150l_revid>;
 			qcom,auto-calibration;
 			status = "disabled";
 
