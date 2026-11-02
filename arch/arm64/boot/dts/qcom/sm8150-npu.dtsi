@@ -34,8 +34,7 @@
 				<&clock_npucc NPU_CC_SLEEP_CLK>,
 				<&clock_npucc NPU_CC_BWMON_CLK>,
 				<&clock_npucc NPU_CC_PERF_CNT_CLK>,
-				<&clock_npucc NPU_CC_BTO_CORE_CLK>,
-				<&clock_npucc NPU_CC_XO_CLK>;
+				<&clock_npucc NPU_CC_BTO_CORE_CLK>;
 		clock-names = "qdss_clk",
 				"at_clk",
 				"trig_clk",
@@ -54,8 +53,7 @@
 				"sleep_clk",
 				"bwmon_clk",
 				"perf_cnt_clk",
-				"bto_core_clk",
-				"xo_clk";
+				"bto_core_clk";
 		vdd-supply = <&npu_core_gdsc>;
 		vdd_cx-supply = <&VDD_CX_LEVEL>;
 		qcom,proxy-reg-names ="vdd", "vdd_cx";
