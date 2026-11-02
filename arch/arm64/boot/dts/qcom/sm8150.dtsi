@@ -1180,7 +1180,7 @@
 		reg = <0xab00000 0x10000>;
 		reg-names = "cc_base";
 		vdd_mm-supply = <&VDD_MMCX_LEVEL>;
-		clock-names = "cfg_ahb_clk";
+		clock-names = "iface";
 		clocks = <&clock_gcc GCC_VIDEO_AHB_CLK>;
 		#clock-cells = <1>;
 		#reset-cells = <1>;
@@ -1192,7 +1192,7 @@
 		reg-names = "cc_base";
 		vdd_mx-supply = <&VDD_MX_LEVEL>;
 		vdd_mm-supply = <&VDD_MMCX_LEVEL>;
-		clock-names = "cfg_ahb_clk";
+		clock-names = "iface";
 		clocks = <&clock_gcc GCC_CAMERA_AHB_CLK>;
 
 		qcom,cam_cc_csi0phytimer_clk_src-opp-handle = <&cam_csiphy0>;
@@ -1223,7 +1223,7 @@
 		reg = <0xaf00000 0x20000>;
 		reg-names = "cc_base";
 		vdd_mm-supply = <&VDD_MMCX_LEVEL>;
-		clock-names = "cfg_ahb_clk";
+		clock-names = "iface";
 		clocks = <&clock_gcc GCC_DISP_AHB_CLK>;
 		#clock-cells = <1>;
 		#reset-cells = <1>;
