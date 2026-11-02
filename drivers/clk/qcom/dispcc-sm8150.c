@@ -20,6 +20,7 @@
 #include <linux/of_device.h>
 #include <linux/clk.h>
 #include <linux/regmap.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/clock/qcom,dispcc-sm8150.h>
 
@@ -1459,20 +1460,6 @@ static struct clk_branch disp_cc_mdss_vsync_clk = {
 	},
 };
 
-static struct clk_branch disp_cc_xo_clk = {
-	.halt_reg = 0x605c,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0x605c,
-		.enable_mask = BIT(0),
-		.hw.init = &(struct clk_init_data){
-			.name = "disp_cc_xo_clk",
-			.flags = CLK_IS_CRITICAL,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_regmap *disp_cc_sm8150_clocks[] = {
 	[DISP_CC_MDSS_AHB_CLK] = &disp_cc_mdss_ahb_clk.clkr,
 	[DISP_CC_MDSS_AHB_CLK_SRC] = &disp_cc_mdss_ahb_clk_src.clkr,
@@ -1534,7 +1521,6 @@ static struct clk_regmap *disp_cc_sm8150_clocks[] = {
 	[DISP_CC_MDSS_VSYNC_CLK_SRC] = &disp_cc_mdss_vsync_clk_src.clkr,
 	[DISP_CC_PLL0] = &disp_cc_pll0.clkr,
 	[DISP_CC_PLL1] = &disp_cc_pll1.clkr,
-	[DISP_CC_XO_CLK] = &disp_cc_xo_clk.clkr,
 };
 
 static const struct qcom_reset_map disp_cc_sm8150_resets[] = {
@@ -1551,7 +1537,7 @@ static const struct regmap_config disp_cc_sm8150_regmap_config = {
 	.fast_io	= true,
 };
 
-static const struct qcom_cc_desc disp_cc_sm8150_desc = {
+static struct qcom_cc_desc disp_cc_sm8150_desc = {
 	.config = &disp_cc_sm8150_regmap_config,
 	.clks = disp_cc_sm8150_clocks,
 	.num_clks = ARRAY_SIZE(disp_cc_sm8150_clocks),
@@ -1612,7 +1598,6 @@ static int disp_cc_sm8150_fixup(struct platform_device *pdev,
 static int disp_cc_sm8150_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
-	struct clk *clk;
 	int ret = 0;
 
 	regmap = qcom_cc_map(pdev, &disp_cc_sm8150_desc);
@@ -1621,13 +1606,13 @@ static int disp_cc_sm8150_probe(struct platform_device *pdev)
 		return PTR_ERR(regmap);
 	}
 
-	clk = devm_clk_get(&pdev->dev, "cfg_ahb_clk");
-	if (IS_ERR(clk)) {
-		if (PTR_ERR(clk) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Unable to get ahb clock handle\n");
-		return PTR_ERR(clk);
-	}
-	devm_clk_put(&pdev->dev, clk);
+	ret = qcom_cc_runtime_init(pdev, &disp_cc_sm8150_desc);
+	if (ret)
+		return ret;
+
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret)
+		return ret;
 
 	ret = disp_cc_sm8150_fixup(pdev, regmap);
 	if (ret)
@@ -1639,12 +1624,19 @@ static int disp_cc_sm8150_probe(struct platform_device *pdev)
 	/* Enable clock gating for DSI and MDP clocks */
 	regmap_update_bits(regmap, DISP_CC_MISC_CMD, 0x10, 0x10);
 
+	/*
+	 * Keep clocks always enabled:
+	 *	disp_cc_xo_clk
+	 */
+	regmap_update_bits(regmap, 0x605c, BIT(0), BIT(0));
+
 	ret = qcom_cc_really_probe(pdev, &disp_cc_sm8150_desc, regmap);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register Display CC clocks\n");
 		return ret;
 	}
 
+	pm_runtime_put_sync(&pdev->dev);
 	dev_info(&pdev->dev, "Registered Display CC clocks\n");
 	return ret;
 }
@@ -1654,12 +1646,19 @@ static void disp_cc_sm8150_sync_state(struct device *dev)
 	qcom_cc_sync_state(dev, &disp_cc_sm8150_desc);
 }
 
+static const struct dev_pm_ops disp_cc_sm8150_pm_ops = {
+	SET_RUNTIME_PM_OPS(qcom_cc_runtime_suspend, qcom_cc_runtime_resume, NULL)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				     pm_runtime_force_resume)
+};
+
 static struct platform_driver disp_cc_sm8150_driver = {
 	.probe		= disp_cc_sm8150_probe,
 	.driver		= {
 		.name	= "disp_cc-sm8150",
 		.of_match_table = disp_cc_sm8150_match_table,
 		.sync_state = disp_cc_sm8150_sync_state,
+		.pm = &disp_cc_sm8150_pm_ops,
 	},
 };
 

@@ -19,6 +19,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/regmap.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/clock/qcom,gpucc-sm8150.h>
 
@@ -143,20 +144,6 @@ static struct clk_rcg2 gpu_cc_gmu_clk_src = {
 		.rate_max = (unsigned long[VDD_NUM]) {
 			[VDD_MIN] = 200000000,
 			[VDD_LOW] = 500000000},
-	},
-};
-
-static struct clk_branch gpu_cc_ahb_clk = {
-	.halt_reg = 0x1078,
-	.halt_check = BRANCH_HALT_DELAY,
-	.clkr = {
-		.enable_reg = 0x1078,
-		.enable_mask = BIT(0),
-		.hw.init = &(struct clk_init_data){
-			.name = "gpu_cc_ahb_clk",
-			.flags = CLK_IS_CRITICAL,
-			.ops = &clk_branch2_ops,
-		},
 	},
 };
 
@@ -354,7 +341,6 @@ static struct clk_branch gpu_cc_sleep_clk = {
 };
 
 static struct clk_regmap *gpu_cc_sm8150_clocks[] = {
-	[GPU_CC_AHB_CLK] = &gpu_cc_ahb_clk.clkr,
 	[GPU_CC_CRC_AHB_CLK] = &gpu_cc_crc_ahb_clk.clkr,
 	[GPU_CC_CX_APB_CLK] = &gpu_cc_cx_apb_clk.clkr,
 	[GPU_CC_CX_GMU_CLK] = &gpu_cc_cx_gmu_clk.clkr,
@@ -389,7 +375,7 @@ static const struct regmap_config gpu_cc_sm8150_regmap_config = {
 	.fast_io	= true,
 };
 
-static const struct qcom_cc_desc gpu_cc_sm8150_desc = {
+static struct qcom_cc_desc gpu_cc_sm8150_desc = {
 	.config = &gpu_cc_sm8150_regmap_config,
 	.clks = gpu_cc_sm8150_clocks,
 	.num_clks = ARRAY_SIZE(gpu_cc_sm8150_clocks),
@@ -437,9 +423,23 @@ static int gpu_cc_sm8150_probe(struct platform_device *pdev)
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
 
+	ret = qcom_cc_runtime_init(pdev, &gpu_cc_sm8150_desc);
+	if (ret)
+		return ret;
+
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret)
+		return ret;
+
 	gpu_cc_sm8150_fixup(pdev);
 
 	clk_trion_pll_configure(&gpu_cc_pll1, regmap, gpu_cc_pll1.config);
+
+	/*
+	 * Keep clocks always enabled:
+	 *	gpu_cc_ahb_clk
+	 */
+	regmap_update_bits(regmap, 0x1078, BIT(0), BIT(0));
 
 	ret = qcom_cc_really_probe(pdev, &gpu_cc_sm8150_desc, regmap);
 	if (ret) {
@@ -447,6 +447,7 @@ static int gpu_cc_sm8150_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	pm_runtime_put_sync(&pdev->dev);
 	dev_info(&pdev->dev, "Registered GPU CC clocks\n");
 	return ret;
 }
@@ -456,12 +457,19 @@ static void gpu_cc_sm8150_sync_state(struct device *dev)
 	qcom_cc_sync_state(dev, &gpu_cc_sm8150_desc);
 }
 
+static const struct dev_pm_ops gpu_cc_sm8150_pm_ops = {
+	SET_RUNTIME_PM_OPS(qcom_cc_runtime_suspend, qcom_cc_runtime_resume, NULL)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				     pm_runtime_force_resume)
+};
+
 static struct platform_driver gpu_cc_sm8150_driver = {
 	.probe		= gpu_cc_sm8150_probe,
 	.driver		= {
 		.name	= "gpu_cc-sm8150",
 		.of_match_table = gpu_cc_sm8150_match_table,
 		.sync_state = gpu_cc_sm8150_sync_state,
+		.pm = &gpu_cc_sm8150_pm_ops,
 	},
 };
 

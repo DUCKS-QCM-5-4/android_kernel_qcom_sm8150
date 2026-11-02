@@ -21,6 +21,7 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/regmap.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/clock/qcom,npucc-sm8150.h>
 
@@ -599,20 +600,6 @@ static struct clk_branch npu_cc_sleep_clk = {
 	},
 };
 
-static struct clk_branch npu_cc_xo_clk = {
-	.halt_reg = 0x3020,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0x3020,
-		.enable_mask = BIT(0),
-		.hw.init = &(struct clk_init_data){
-			.name = "npu_cc_xo_clk",
-			.flags = CLK_IS_CRITICAL,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_regmap *npu_cc_sm8150_clocks[] = {
 	[NPU_CC_ARMWIC_CORE_CLK] = &npu_cc_armwic_core_clk.clkr,
 	[NPU_CC_BTO_CORE_CLK] = &npu_cc_bto_core_clk.clkr,
@@ -636,7 +623,6 @@ static struct clk_regmap *npu_cc_sm8150_clocks[] = {
 	[NPU_CC_PLL1_OUT_EVEN] = &npu_cc_pll1_out_even.clkr,
 	[NPU_CC_QTIMER_CORE_CLK] = &npu_cc_qtimer_core_clk.clkr,
 	[NPU_CC_SLEEP_CLK] = &npu_cc_sleep_clk.clkr,
-	[NPU_CC_XO_CLK] = &npu_cc_xo_clk.clkr,
 };
 
 static const struct qcom_reset_map npu_cc_sm8150_resets[] = {
@@ -652,7 +638,7 @@ static const struct regmap_config npu_cc_sm8150_regmap_config = {
 	.fast_io	= true,
 };
 
-static const struct qcom_cc_desc npu_cc_sm8150_desc = {
+static struct qcom_cc_desc npu_cc_sm8150_desc = {
 	.config = &npu_cc_sm8150_regmap_config,
 	.clks = npu_cc_sm8150_clocks,
 	.num_clks = ARRAY_SIZE(npu_cc_sm8150_clocks),
@@ -755,12 +741,26 @@ static int npu_cc_sm8150_probe(struct platform_device *pdev)
 		return PTR_ERR(vdd_gdsc);
 	}
 
+	ret = qcom_cc_runtime_init(pdev, &npu_cc_sm8150_desc);
+	if (ret)
+		return ret;
+
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret)
+		return ret;
+
 	ret = npu_cc_sm8150_fixup(pdev, regmap);
 	if (ret)
 		return ret;
 
 	clk_trion_pll_configure(&npu_cc_pll0, regmap, &npu_cc_pll0_config);
 	clk_trion_pll_configure(&npu_cc_pll1, regmap, &npu_cc_pll1_config);
+
+	/*
+	 * Keep clocks always enabled:
+	 *	npu_cc_xo_clk
+	 */
+	regmap_update_bits(regmap, 0x3020, BIT(0), BIT(0));
 
 	/* Register the fixed factor clock for CRC divide */
 	ret = devm_clk_hw_register(&pdev->dev, &npu_cc_crc_div.hw);
@@ -781,6 +781,7 @@ static int npu_cc_sm8150_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	pm_runtime_put_sync(&pdev->dev);
 	dev_info(&pdev->dev, "Registered NPU CC clocks\n");
 	return ret;
 }
@@ -790,12 +791,19 @@ static void npu_cc_sm8150_sync_state(struct device *dev)
 	qcom_cc_sync_state(dev, &npu_cc_sm8150_desc);
 }
 
+static const struct dev_pm_ops npu_cc_sm8150_pm_ops = {
+	SET_RUNTIME_PM_OPS(qcom_cc_runtime_suspend, qcom_cc_runtime_resume, NULL)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				     pm_runtime_force_resume)
+};
+
 static struct platform_driver npu_cc_sm8150_driver = {
 	.probe		= npu_cc_sm8150_probe,
 	.driver		= {
 		.name	= "npu_cc-sm8150",
 		.of_match_table = npu_cc_sm8150_match_table,
 		.sync_state = npu_cc_sm8150_sync_state,
+		.pm = &npu_cc_sm8150_pm_ops,
 	},
 };
 

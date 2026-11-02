@@ -21,6 +21,7 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/regmap.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/clock/qcom,camcc-sm8150.h>
 
@@ -1722,20 +1723,6 @@ static struct clk_branch cam_cc_fd_core_uar_clk = {
 	},
 };
 
-static struct clk_branch cam_cc_gdsc_clk = {
-	.halt_reg = 0xc1e4,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0xc1e4,
-		.enable_mask = BIT(0),
-		.hw.init = &(struct clk_init_data){
-			.name = "cam_cc_gdsc_clk",
-			.flags = CLK_IS_CRITICAL,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_branch cam_cc_icp_ahb_clk = {
 	.halt_reg = 0xc0d8,
 	.halt_check = BRANCH_HALT,
@@ -2388,7 +2375,6 @@ static struct clk_regmap *cam_cc_sm8150_clocks[] = {
 	[CAM_CC_FD_CORE_CLK] = &cam_cc_fd_core_clk.clkr,
 	[CAM_CC_FD_CORE_CLK_SRC] = &cam_cc_fd_core_clk_src.clkr,
 	[CAM_CC_FD_CORE_UAR_CLK] = &cam_cc_fd_core_uar_clk.clkr,
-	[CAM_CC_GDSC_CLK] = &cam_cc_gdsc_clk.clkr,
 	[CAM_CC_ICP_AHB_CLK] = &cam_cc_icp_ahb_clk.clkr,
 	[CAM_CC_ICP_CLK] = &cam_cc_icp_clk.clkr,
 	[CAM_CC_ICP_CLK_SRC] = &cam_cc_icp_clk_src.clkr,
@@ -2463,7 +2449,7 @@ static const struct regmap_config cam_cc_sm8150_regmap_config = {
 	.fast_io	= true,
 };
 
-static const struct qcom_cc_desc cam_cc_sm8150_desc = {
+static struct qcom_cc_desc cam_cc_sm8150_desc = {
 	.config = &cam_cc_sm8150_regmap_config,
 	.clks = cam_cc_sm8150_clocks,
 	.num_clks = ARRAY_SIZE(cam_cc_sm8150_clocks),
@@ -2514,7 +2500,6 @@ static int cam_cc_sm8150_fixup(struct platform_device *pdev,
 static int cam_cc_sm8150_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
-	struct clk *clk;
 	int ret = 0;
 
 	regmap = qcom_cc_map(pdev, &cam_cc_sm8150_desc);
@@ -2523,13 +2508,13 @@ static int cam_cc_sm8150_probe(struct platform_device *pdev)
 		return PTR_ERR(regmap);
 	}
 
-	clk = devm_clk_get(&pdev->dev, "cfg_ahb_clk");
-	if (IS_ERR(clk)) {
-		if (PTR_ERR(clk) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Unable to get ahb clock handle\n");
-		return PTR_ERR(clk);
-	}
-	devm_clk_put(&pdev->dev, clk);
+	ret = qcom_cc_runtime_init(pdev, &cam_cc_sm8150_desc);
+	if (ret)
+		return ret;
+
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret)
+		return ret;
 
 	ret = cam_cc_sm8150_fixup(pdev, regmap);
 	if (ret)
@@ -2541,12 +2526,19 @@ static int cam_cc_sm8150_probe(struct platform_device *pdev)
 	clk_trion_pll_configure(&cam_cc_pll3, regmap, cam_cc_pll3.config);
 	clk_trion_pll_configure(&cam_cc_pll4, regmap, cam_cc_pll4.config);
 
+	/*
+	 * Keep clocks always enabled:
+	 *	cam_cc_gdsc_clk
+	 */
+	regmap_update_bits(regmap, 0xc1e4, BIT(0), BIT(0));
+
 	ret = qcom_cc_really_probe(pdev, &cam_cc_sm8150_desc, regmap);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register CAM CC clocks\n");
 		return ret;
 	}
 
+	pm_runtime_put_sync(&pdev->dev);
 	dev_info(&pdev->dev, "Registered CAM CC clocks\n");
 	return ret;
 }
@@ -2556,12 +2548,19 @@ static void cam_cc_sm8150_sync_state(struct device *dev)
 	qcom_cc_sync_state(dev, &cam_cc_sm8150_desc);
 }
 
+static const struct dev_pm_ops cam_cc_sm8150_pm_ops = {
+	SET_RUNTIME_PM_OPS(qcom_cc_runtime_suspend, qcom_cc_runtime_resume, NULL)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				     pm_runtime_force_resume)
+};
+
 static struct platform_driver cam_cc_sm8150_driver = {
 	.probe		= cam_cc_sm8150_probe,
 	.driver		= {
 		.name	= "cam_cc-sm8150",
 		.of_match_table = cam_cc_sm8150_match_table,
 		.sync_state = cam_cc_sm8150_sync_state,
+		.pm = &cam_cc_sm8150_pm_ops,
 	},
 };
 

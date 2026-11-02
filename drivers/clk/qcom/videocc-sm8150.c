@@ -21,6 +21,7 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/regmap.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/clock/qcom,videocc-sm8150.h>
 
@@ -236,27 +237,12 @@ static struct clk_branch video_cc_mvsc_core_clk = {
 	},
 };
 
-static struct clk_branch video_cc_xo_clk = {
-	.halt_reg = 0x984,
-	.halt_check = BRANCH_HALT,
-	.clkr = {
-		.enable_reg = 0x984,
-		.enable_mask = BIT(0),
-		.hw.init = &(struct clk_init_data){
-			.name = "video_cc_xo_clk",
-			.flags = CLK_IS_CRITICAL,
-			.ops = &clk_branch2_ops,
-		},
-	},
-};
-
 static struct clk_regmap *video_cc_sm8150_clocks[] = {
 	[VIDEO_CC_IRIS_AHB_CLK] = &video_cc_iris_ahb_clk.clkr,
 	[VIDEO_CC_IRIS_CLK_SRC] = &video_cc_iris_clk_src.clkr,
 	[VIDEO_CC_MVS0_CORE_CLK] = &video_cc_mvs0_core_clk.clkr,
 	[VIDEO_CC_MVS1_CORE_CLK] = &video_cc_mvs1_core_clk.clkr,
 	[VIDEO_CC_MVSC_CORE_CLK] = &video_cc_mvsc_core_clk.clkr,
-	[VIDEO_CC_XO_CLK] = &video_cc_xo_clk.clkr,
 	[VIDEO_PLL0] = &video_pll0.clkr,
 };
 
@@ -272,7 +258,7 @@ static const struct qcom_reset_map video_cc_sm8150_resets[] = {
 	[VIDEO_CC_MVSC_CORE_CLK_BCR] = { 0x850, 2 },
 };
 
-static const struct qcom_cc_desc video_cc_sm8150_desc = {
+static struct qcom_cc_desc video_cc_sm8150_desc = {
 	.config = &video_cc_sm8150_regmap_config,
 	.clks = video_cc_sm8150_clocks,
 	.num_clks = ARRAY_SIZE(video_cc_sm8150_clocks),
@@ -319,7 +305,6 @@ static int video_cc_sm8150_fixup(struct platform_device *pdev,
 static int video_cc_sm8150_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
-	struct clk *clk;
 	int ret;
 
 	regmap = qcom_cc_map(pdev, &video_cc_sm8150_desc);
@@ -328,13 +313,13 @@ static int video_cc_sm8150_probe(struct platform_device *pdev)
 		return PTR_ERR(regmap);
 	}
 
-	clk = devm_clk_get(&pdev->dev, "cfg_ahb_clk");
-	if (IS_ERR(clk)) {
-		if (PTR_ERR(clk) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Unable to get ahb clock handle\n");
-		return PTR_ERR(clk);
-	}
-	devm_clk_put(&pdev->dev, clk);
+	ret = qcom_cc_runtime_init(pdev, &video_cc_sm8150_desc);
+	if (ret)
+		return ret;
+
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret)
+		return ret;
 
 	ret = video_cc_sm8150_fixup(pdev, regmap);
 	if (ret)
@@ -342,12 +327,19 @@ static int video_cc_sm8150_probe(struct platform_device *pdev)
 
 	clk_trion_pll_configure(&video_pll0, regmap, video_pll0.config);
 
+	/*
+	 * Keep clocks always enabled:
+	 *	video_cc_xo_clk
+	 */
+	regmap_update_bits(regmap, 0x984, BIT(0), BIT(0));
+
 	ret = qcom_cc_really_probe(pdev, &video_cc_sm8150_desc, regmap);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register Video CC clocks\n");
 		return ret;
 	}
 
+	pm_runtime_put_sync(&pdev->dev);
 	dev_info(&pdev->dev, "Registered Video CC clocks\n");
 
 	return ret;
@@ -358,12 +350,19 @@ static void video_cc_sm8150_sync_state(struct device *dev)
 	qcom_cc_sync_state(dev, &video_cc_sm8150_desc);
 }
 
+static const struct dev_pm_ops video_cc_sm8150_pm_ops = {
+	SET_RUNTIME_PM_OPS(qcom_cc_runtime_suspend, qcom_cc_runtime_resume, NULL)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				     pm_runtime_force_resume)
+};
+
 static struct platform_driver video_cc_sm8150_driver = {
 	.probe		= video_cc_sm8150_probe,
 	.driver		= {
 		.name	= "video_cc-sm8150",
 		.of_match_table = video_cc_sm8150_match_table,
 		.sync_state = video_cc_sm8150_sync_state,
+		.pm = &video_cc_sm8150_pm_ops,
 	},
 };
 
