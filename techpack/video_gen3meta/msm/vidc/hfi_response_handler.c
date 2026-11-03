@@ -279,6 +279,16 @@ static int hfi_process_sess_evt_seq_changed(u32 device_id,
 				rem_size -= sizeof(struct
 					hfi_index_extradata_input_crop_payload);
 				break;
+			case HFI_EXTRADATA_INTERLACE_VIDEO:
+				if (!validate_pkt_size(rem_size, sizeof(struct
+					hfi_extradata_interlace_video_payload)))
+					return -E2BIG;
+				data_ptr = data_ptr + sizeof(u32);
+				data_ptr += sizeof(struct
+					hfi_extradata_interlace_video_payload);
+				rem_size -= sizeof(struct
+					hfi_extradata_interlace_video_payload);
+				break;
 			case HFI_PROPERTY_PARAM_VDEC_DPB_COUNTS_1:
 				if (!validate_pkt_size(rem_size, sizeof(struct
 					hfi_dpb_counts_1)))
