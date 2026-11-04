@@ -371,6 +371,16 @@ int qcom_cc_really_probe(struct platform_device *pdev,
 		ret = devm_clk_register_regmap(dev, rclks[i]);
 		if (ret)
 			return ret;
+	}
+
+	/*
+	 * Populate OPP tables only after all providers in this
+	 * controller are registered else child RCGs querying internal
+	 * PLL parents during clk_hw_round_rate() find NULL parents.
+	 */
+	for (i = 0; i < num_clks; i++) {
+		if (!rclks[i])
+			continue;
 
 		clk_hw_populate_clock_opp_table(dev->of_node, &rclks[i]->hw);
 
