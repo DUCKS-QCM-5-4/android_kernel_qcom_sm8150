@@ -1171,6 +1171,9 @@
 		vdd_cx-supply = <&VDD_CX_LEVEL>;
 		vdd_cx_ao-supply = <&VDD_CX_LEVEL_AO>;
 		vdd_mm-supply = <&VDD_MMCX_LEVEL>;
+		clocks = <&clock_rpmh RPMH_CXO_CLK>, <&clock_rpmh RPMH_CXO_CLK_A>,
+				 <&sleep_clk>;
+		clock-names = "bi_tcxo", "bi_tcxo_ao", "sleep_clk";
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 	};
@@ -1180,8 +1183,8 @@
 		reg = <0xab00000 0x10000>;
 		reg-names = "cc_base";
 		vdd_mm-supply = <&VDD_MMCX_LEVEL>;
-		clock-names = "iface";
-		clocks = <&clock_gcc GCC_VIDEO_AHB_CLK>;
+		clocks = <&clock_gcc GCC_VIDEO_AHB_CLK>, <&clock_rpmh RPMH_CXO_CLK>;
+		clock-names = "iface", "bi_tcxo";
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 	};
@@ -1192,8 +1195,8 @@
 		reg-names = "cc_base";
 		vdd_mx-supply = <&VDD_MX_LEVEL>;
 		vdd_mm-supply = <&VDD_MMCX_LEVEL>;
-		clock-names = "iface";
-		clocks = <&clock_gcc GCC_CAMERA_AHB_CLK>;
+		clocks = <&clock_gcc GCC_CAMERA_AHB_CLK>, <&clock_rpmh RPMH_CXO_CLK>;
+		clock-names = "iface", "bi_tcxo";
 
 		qcom,cam_cc_csi0phytimer_clk_src-opp-handle = <&cam_csiphy0>;
 		qcom,cam_cc_csi1phytimer_clk_src-opp-handle = <&cam_csiphy1>;
@@ -1223,8 +1226,8 @@
 		reg = <0xaf00000 0x20000>;
 		reg-names = "cc_base";
 		vdd_mm-supply = <&VDD_MMCX_LEVEL>;
-		clock-names = "iface";
-		clocks = <&clock_gcc GCC_DISP_AHB_CLK>;
+		clock-names = "iface", "bi_tcxo";
+		clocks = <&clock_gcc GCC_DISP_AHB_CLK>, <&clock_rpmh RPMH_CXO_CLK>;
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 	};
@@ -1235,6 +1238,15 @@
 		reg-names = "cc_base";
 		vdd_cx-supply = <&VDD_CX_LEVEL>;
 		vdd_gdsc-supply = <&npu_core_gdsc>;
+		clocks = <&clock_rpmh RPMH_CXO_CLK>,
+				<&clock_gcc GCC_NPU_GPLL0_DIV_CLK_SRC>,
+				<&clock_gcc GCC_NPU_GPLL0_CLK_SRC>,
+				<&clock_gcc GCC_NPU_AXI_CLK>;
+		clock-names =
+			"bi_tcxo",
+			"gcc_npu_gpll0_div_clk_src",
+			"gcc_npu_gpll0_clk_src",
+			"gcc_npu_axi_clk";
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 	};
@@ -1246,6 +1258,14 @@
 		vdd_cx-supply = <&VDD_CX_LEVEL>;
 		vdd_mx-supply = <&VDD_MX_LEVEL>;
 		qcom,gpu_cc_gmu_clk_src-opp-handle = <&gmu>;
+		clocks = <&clock_rpmh RPMH_CXO_CLK>,
+				<&clock_gcc GCC_GPU_GPLL0_CLK_SRC>,
+				<&clock_gcc GCC_GPU_GPLL0_DIV_CLK_SRC>,
+				<&clock_gcc GCC_GPU_CFG_AHB_CLK>;
+		clock-names = "bi_tcxo",
+			"gcc_gpu_gpll0_clk_src",
+			"gcc_gpu_gpll0_div_clk_src",
+			"iface";
 		#clock-cells = <1>;
 		#reset-cells = <1>;
 	};
@@ -1254,6 +1274,8 @@
 		compatible = "qcom,scc-sm8150";
 		reg = <0x2b10000 0x30000>;
 		vdd_scc_cx-supply = <&pm8150_l8_level>;
+		clocks = <&clock_rpmh RPMH_CXO_CLK>;
+		clock-names = "bi_tcxo";
 		#clock-cells = <1>;
 		status = "disabled";
 	};
