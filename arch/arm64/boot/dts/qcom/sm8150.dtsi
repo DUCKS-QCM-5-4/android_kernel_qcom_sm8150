@@ -879,43 +879,6 @@
 		operating-points-v2 = <&ddr_bw_opp_table>;
 	};
 
-	cpu0_memlat_cpugrp: qcom,cpu0-cpugrp {
-		compatible = "qcom,arm-memlat-cpugrp";
-		qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3>;
-
-		cpu0_cpu_l3_latmon: qcom,cpu0-cpu-l3-latmon {
-			compatible = "qcom,arm-memlat-mon";
-			qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3>;
-			qcom,target-dev = <&cpu0_cpu_l3_lat>;
-			qcom,cachemiss-ev = <0x17>;
-			qcom,core-dev-table = <&cpu0_cpu_l3_tbl>;
-		};
-
-		cpu0_cpu_llcc_latmon: qcom,cpu0-cpu-llcc-latmon {
-			compatible = "qcom,arm-memlat-mon";
-			qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3>;
-			qcom,target-dev = <&cpu0_cpu_llcc_lat>;
-			qcom,cachemiss-ev = <0x2A>;
-			qcom,core-dev-table =
-				<  300000 MHZ_TO_MBPS(150, 16) >,
-				<  768000 MHZ_TO_MBPS(200, 16) >,
-				< 1075200 MHZ_TO_MBPS(403, 16) >,
-				< 1267200 MHZ_TO_MBPS(403, 16) >;
-		};
-
-		cpu0_llcc_ddr_latmon: qcom,cpu0-llcc-ddr-latmon {
-			compatible = "qcom,arm-memlat-mon";
-			qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3>;
-			qcom,target-dev = <&cpu0_llcc_ddr_lat>;
-			qcom,cachemiss-ev = <0x1000>;
-			qcom,core-dev-table =
-				<  300000 MHZ_TO_MBPS( 200, 4) >,
-				<  768000 MHZ_TO_MBPS( 451, 4) >,
-				< 1075200 MHZ_TO_MBPS( 547, 4) >,
-				< 1267200 MHZ_TO_MBPS( 768, 4) >;
-		};
-	};
-
 	cpu4_cpu_l3_lat: qcom,cpu4-cpu-l3-lat {
 		compatible = "qcom,devfreq-icc-l3";
 		reg = <0x18321110 0x500>;
@@ -991,9 +954,61 @@
 			< 2016000 1344000000 >;
 	};
 
-	cpu4_memlat_cpugrp: qcom,cpu4-cpugrp {
+	npu_npu_ddr_bw: qcom,npu-npu-ddr-bw {
+		compatible = "qcom,devfreq-icc-ddr";
+		governor = "bw_hwmon";
+		interconnects = <&compute_noc MASTER_NPU &mc_virt SLAVE_EBI1>;
+		operating-points-v2 = <&ddr_bw_opp_table>;
+		qcom,active-only;
+	};
+
+	npu_npu_ddr_bwmon: qcom,npu-npu-ddr-bwmon@9960300 {
+		compatible = "qcom,bimc-bwmon4";
+		reg = <0x9960300 0x300>, <0x9960200 0x200>;
+		reg-names = "base", "global_base";
+		interrupts = <GIC_SPI 365 IRQ_TYPE_LEVEL_HIGH>;
+		qcom,mport = <0>;
+		qcom,hw-timer-hz = <19200000>;
+		qcom,target-dev = <&npu_npu_ddr_bw>;
+		qcom,count-unit = <0x10000>;
+	};
+
+	memlat_cpugrp: qcom,memlat-cpugrp {
 		compatible = "qcom,arm-memlat-cpugrp";
-		qcom,cpulist = <&CPU4 &CPU5 &CPU6 &CPU7>;
+		qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3
+			&CPU4 &CPU5 &CPU6 &CPU7>;
+
+		cpu0_cpu_l3_latmon: qcom,cpu0-cpu-l3-latmon {
+			compatible = "qcom,arm-memlat-mon";
+			qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3>;
+			qcom,target-dev = <&cpu0_cpu_l3_lat>;
+			qcom,cachemiss-ev = <0x17>;
+			qcom,core-dev-table = <&cpu0_cpu_l3_tbl>;
+		};
+
+		cpu0_cpu_llcc_latmon: qcom,cpu0-cpu-llcc-latmon {
+			compatible = "qcom,arm-memlat-mon";
+			qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3>;
+			qcom,target-dev = <&cpu0_cpu_llcc_lat>;
+			qcom,cachemiss-ev = <0x2A>;
+			qcom,core-dev-table =
+				<  300000 MHZ_TO_MBPS(150, 16) >,
+				<  768000 MHZ_TO_MBPS(200, 16) >,
+				< 1075200 MHZ_TO_MBPS(403, 16) >,
+				< 1267200 MHZ_TO_MBPS(403, 16) >;
+		};
+
+		cpu0_llcc_ddr_latmon: qcom,cpu0-llcc-ddr-latmon {
+			compatible = "qcom,arm-memlat-mon";
+			qcom,cpulist = <&CPU0 &CPU1 &CPU2 &CPU3>;
+			qcom,target-dev = <&cpu0_llcc_ddr_lat>;
+			qcom,cachemiss-ev = <0x1000>;
+			qcom,core-dev-table =
+				<  300000 MHZ_TO_MBPS( 200, 4) >,
+				<  768000 MHZ_TO_MBPS( 451, 4) >,
+				< 1075200 MHZ_TO_MBPS( 547, 4) >,
+				< 1267200 MHZ_TO_MBPS( 768, 4) >;
+		};
 
 		cpu4_cpu_l3_latmon: qcom,cpu4-cpu-l3-latmon {
 			compatible = "qcom,arm-memlat-mon";
@@ -1051,25 +1066,6 @@
 				< 2016000 MHZ_TO_MBPS(1017, 4) >,
 				< 2054400 MHZ_TO_MBPS(2092, 4) >;
 		};
-	};
-
-	npu_npu_ddr_bw: qcom,npu-npu-ddr-bw {
-		compatible = "qcom,devfreq-icc-ddr";
-		governor = "bw_hwmon";
-		interconnects = <&compute_noc MASTER_NPU &mc_virt SLAVE_EBI1>;
-		operating-points-v2 = <&ddr_bw_opp_table>;
-		qcom,active-only;
-	};
-
-	npu_npu_ddr_bwmon: qcom,npu-npu-ddr-bwmon@9960300 {
-		compatible = "qcom,bimc-bwmon4";
-		reg = <0x9960300 0x300>, <0x9960200 0x200>;
-		reg-names = "base", "global_base";
-		interrupts = <GIC_SPI 365 IRQ_TYPE_LEVEL_HIGH>;
-		qcom,mport = <0>;
-		qcom,hw-timer-hz = <19200000>;
-		qcom,target-dev = <&npu_npu_ddr_bw>;
-		qcom,count-unit = <0x10000>;
 	};
 
 	cpu_pmu: cpu-pmu {
