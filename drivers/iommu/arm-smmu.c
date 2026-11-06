@@ -1960,6 +1960,8 @@ static int arm_smmu_adjust_domain_geometry(struct device *dev,
 	if (ret)
 		return ret;
 
+	qcom_smmu_sdsp_fixup(dev, &dma_base, &dma_end);
+
 	domain->geometry.aperture_start = dma_base;
 	domain->geometry.aperture_end = dma_end;
 	return 0;

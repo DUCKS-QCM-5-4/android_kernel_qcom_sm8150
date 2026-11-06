@@ -20,6 +20,7 @@
 #include <linux/iova.h>
 #include <linux/irq.h>
 #include <linux/mm.h>
+#include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/mutex.h>
 #include <linux/pci.h>
@@ -1225,6 +1226,24 @@ static const struct dma_map_ops iommu_dma_ops = {
 	.get_merge_boundary	= iommu_dma_get_merge_boundary,
 };
 
+static inline bool qcom_smmu_sdsp_fixup_quirk(struct device *dev)
+{
+	struct device_node *np = dev ? dev->of_node : NULL;
+	const char *label;
+
+	if (!np || !(of_machine_is_compatible("qcom,sm8150") ||
+				of_machine_is_compatible("qcom,sdmshrike")))
+		return false;
+
+	if (!of_device_is_compatible(np, "qcom,msm-fastrpc-compute-cb") ||
+		of_property_read_bool(np, "qcom,secure-context-bank") ||
+		of_property_read_string(np, "label", &label) ||
+		strcmp(label, "sdsprpc-smd"))
+		return false;
+
+	return true;
+}
+
 static int iommu_init_dma_resources(struct device *dev,
 				      struct iommu_domain *domain, u64 dma_base,
 				      u64 size)
@@ -1236,6 +1255,13 @@ static int iommu_init_dma_resources(struct device *dev,
 	if (is_fast) {
 		dev->dma_ops = fast_smmu_get_dma_ops();
 	} else {
+		if (domain->geometry.force_aperture &&
+			qcom_smmu_sdsp_fixup_quirk(dev)) {
+			dma_base = domain->geometry.aperture_start;
+			size = domain->geometry.aperture_end -
+				domain->geometry.aperture_start + 1;
+		}
+
 		ret = iommu_dma_init_domain(domain, dma_base, size, dev);
 		if (!ret)
 			dev->dma_ops = &iommu_dma_ops;

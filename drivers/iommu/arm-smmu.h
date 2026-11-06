@@ -598,6 +598,8 @@ int arm_mmu500_reset(struct arm_smmu_device *smmu);
 int arm_smmu_power_on(struct arm_smmu_power_resources *pwr);
 void arm_smmu_power_off(struct arm_smmu_device *smmu,
 			struct arm_smmu_power_resources *pwr);
+void qcom_smmu_sdsp_fixup(struct device *dev, dma_addr_t *dma_base,
+			dma_addr_t *dma_end);
 
 /* Misc. constants */
 #define TBUID_SHIFT                     10

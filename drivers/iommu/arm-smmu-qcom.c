@@ -4,6 +4,7 @@
  */
 
 #include <linux/bitfield.h>
+#include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
@@ -1917,4 +1918,45 @@ struct arm_smmu_device *qsmmuv2_impl_init(struct arm_smmu_device *smmu)
 
 	devm_kfree(smmu->dev, smmu);
 	return &data->smmu;
+}
+
+/*
+ * sm8150 has a hardware bug in the slpi-smmu interface where the stream
+ * ID is not removed from the IOVA. This software workaround modifies
+ * the start address of the IOVA address space for fastrpc slpi context banks.
+ * SM8150 and SDMSHRIKE both have sdsp cb's on 414 and workaround is enabled
+ * for both, do the same here
+ */
+void qcom_smmu_sdsp_fixup(struct device *dev, dma_addr_t *dma_base,
+			  dma_addr_t *dma_end)
+{
+	struct device_node *np = dev ? dev->of_node : NULL;
+	struct of_phandle_args spec;
+	const char *label;
+	u32 cb;
+
+	if (!np || !(of_machine_is_compatible("qcom,sm8150") ||
+		     of_machine_is_compatible("qcom,sdmshrike")))
+		return;
+
+	if (!of_device_is_compatible(np, "qcom,msm-fastrpc-compute-cb") ||
+	    of_property_read_bool(np, "qcom,secure-context-bank") ||
+	    of_property_read_string(np, "label", &label) ||
+	    strcmp(label, "sdsprpc-smd"))
+		return;
+
+	if (of_parse_phandle_with_args(np, "iommus", "#iommu-cells", 0, &spec))
+		return;
+
+	cb = spec.args[0] & 0x3;
+	of_node_put(spec.np);
+
+	if (!cb || *dma_base >= BIT_ULL(32))
+		return;
+
+	*dma_base += (u64)cb << 32;
+	*dma_end += (u64)cb << 32;
+	dma_set_mask_and_coherent(dev, DMA_BIT_MASK(34));
+	dev_info(dev, "SDSP SMMU workaround: IOVA base 0x%llx end 0x%llx\n",
+		 (u64)*dma_base, (u64)*dma_end);
 }
