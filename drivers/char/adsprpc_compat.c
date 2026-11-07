@@ -22,6 +22,8 @@
 		_IOWR('R', 6, struct compat_fastrpc_ioctl_init)
 #define COMPAT_FASTRPC_IOCTL_INVOKE_ATTRS \
 		_IOWR('R', 7, struct compat_fastrpc_ioctl_invoke_attrs)
+#define COMPAT_FASTRPC_IOCTL_GETPERF \
+		_IOWR('R', 9, struct compat_fastrpc_ioctl_perf)
 #define COMPAT_FASTRPC_IOCTL_INIT_ATTRS \
 		_IOWR('R', 10, struct compat_fastrpc_ioctl_init_attrs)
 #define COMPAT_FASTRPC_IOCTL_INVOKE_CRC \
@@ -32,6 +34,9 @@
 		_IOWR('R', 14, struct compat_fastrpc_ioctl_mmap_64)
 #define COMPAT_FASTRPC_IOCTL_MUNMAP_64 \
 		_IOWR('R', 15, struct compat_fastrpc_ioctl_munmap_64)
+#define COMPAT_FASTRPC_IOCTL_GET_DSP_INFO_LEGACY \
+		_IOWR('R', 16, \
+			struct compat_fastrpc_ioctl_dsp_capabilities)
 #define COMPAT_FASTRPC_IOCTL_GET_DSP_INFO \
 		_IOWR('R', 17, \
 			struct compat_fastrpc_ioctl_capability)
@@ -220,6 +225,17 @@ struct compat_fastrpc_ioctl_control {
 		struct compat_fastrpc_ctrl_wakelock wp;
 		struct compat_fastrpc_ctrl_pm pm;
 	};
+};
+
+struct compat_fastrpc_ioctl_perf {
+	compat_uptr_t data;
+	compat_uint_t numkeys;
+	compat_uptr_t keys;
+};
+
+struct compat_fastrpc_ioctl_dsp_capabilities {
+	compat_uint_t domain;
+	compat_uint_t dsp_attributes[FASTRPC_MAX_DSP_ATTRIBUTES_LEGACY];
 };
 
 struct compat_fastrpc_ioctl_capability {
@@ -778,6 +794,95 @@ static int compat_fastrpc_get_dsp_info(struct file *filp,
 	return err;
 }
 
+static int compat_get_fastrpc_ioctl_perf(
+			struct compat_fastrpc_ioctl_perf __user *perf32,
+			struct fastrpc_ioctl_perf __user *perf)
+{
+	compat_uptr_t p;
+	int err;
+
+	err = get_user(p, &perf32->data);
+	err |= put_user(p, &perf->data);
+	err |= get_user(p, &perf32->keys);
+	err |= put_user(p, &perf->keys);
+
+	return err;
+}
+
+static int compat_fastrpc_getperf(struct file *filp,
+		unsigned long arg)
+{
+	int err = 0;
+	struct compat_fastrpc_ioctl_perf __user *perf32;
+	struct fastrpc_ioctl_perf *perf;
+	compat_uint_t u;
+	long ret;
+
+	perf32 = compat_ptr(arg);
+	VERIFY(err, NULL != (perf = compat_alloc_user_space(
+						sizeof(*perf))));
+	if (err)
+		return -EFAULT;
+	VERIFY(err, 0 == compat_get_fastrpc_ioctl_perf(perf32,
+						perf));
+	if (err)
+		return err;
+	ret = filp->f_op->unlocked_ioctl(filp, FASTRPC_IOCTL_GETPERF,
+						(unsigned long)perf);
+	if (ret)
+		return ret;
+	err = get_user(u, &perf->numkeys);
+	err |= put_user(u, &perf32->numkeys);
+	return err;
+}
+
+static int compat_put_fastrpc_ioctl_get_dsp_info_legacy(
+		struct compat_fastrpc_ioctl_dsp_capabilities __user *info32,
+		struct fastrpc_ioctl_dsp_capabilities __user *info)
+{
+	compat_uint_t u, *dsp_attr, *dsp_attr_32;
+	int err, ii;
+
+	dsp_attr = info->dsp_attributes;
+	dsp_attr_32 = info32->dsp_attributes;
+	for (ii = 0, err = 0; ii < FASTRPC_MAX_DSP_ATTRIBUTES_LEGACY; ii++) {
+		err |= get_user(u, dsp_attr++);
+		err |= put_user(u, dsp_attr_32++);
+	}
+
+	return err;
+}
+
+static int compat_fastrpc_get_dsp_info_legacy(struct file *filp,
+		unsigned long arg)
+{
+	struct compat_fastrpc_ioctl_dsp_capabilities __user *info32;
+	struct fastrpc_ioctl_dsp_capabilities *info;
+	compat_uint_t u;
+	long ret;
+	int err = 0;
+
+	info32 = compat_ptr(arg);
+	VERIFY(err, NULL != (info = compat_alloc_user_space(
+						sizeof(*info))));
+	if (err)
+		return -EFAULT;
+
+	err = get_user(u, &info32->domain);
+	err |= put_user(u, &info->domain);
+	if (err)
+		return err;
+
+	ret = filp->f_op->unlocked_ioctl(filp,
+			FASTRPC_IOCTL_GET_DSP_INFO_LEGACY,
+			(unsigned long)info);
+	if (ret)
+		return ret;
+
+	err = compat_put_fastrpc_ioctl_get_dsp_info_legacy(info32, info);
+	return err;
+}
+
 static inline long compat_fastrpc_mmap_device_ioctl(struct file *filp,
 		unsigned int cmd, unsigned long arg)
 {
@@ -974,9 +1079,17 @@ long compat_fastrpc_device_ioctl(struct file *filp, unsigned int cmd,
 	}
 	case FASTRPC_IOCTL_SETMODE:
 		return fastrpc_setmode(filp, cmd, arg);
+	case COMPAT_FASTRPC_IOCTL_GETPERF:
+	{
+		return compat_fastrpc_getperf(filp, arg);
+	}
 	case COMPAT_FASTRPC_IOCTL_CONTROL:
 	{
 		return compat_fastrpc_control(filp, arg);
+	}
+	case COMPAT_FASTRPC_IOCTL_GET_DSP_INFO_LEGACY:
+	{
+		return compat_fastrpc_get_dsp_info_legacy(filp, arg);
 	}
 	case COMPAT_FASTRPC_IOCTL_GET_DSP_INFO:
 	{

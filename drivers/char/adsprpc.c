@@ -202,6 +202,8 @@
 #define GLINK_MSG_HISTORY_LEN (128)
 
 #define PERF_CAPABILITY   (1 << 1)
+#define PERF_KEYS \
+	"count:flush:map:copy:rpmsg:getargs:putargs:invalidate:invoke"
 
 /*Max number of region supported  */
 #define MAX_UNIQUE_ID 5
@@ -6211,6 +6213,59 @@ bail:
 	return err;
 }
 
+static int fastrpc_getperf(struct fastrpc_ioctl_perf *ioctl_perf,
+				void *param, struct fastrpc_file *fl)
+{
+	int err = 0;
+
+	K_COPY_FROM_USER(err, 0, ioctl_perf,
+				param, sizeof(*ioctl_perf));
+	if (err)
+		goto bail;
+	ioctl_perf->numkeys = PERF_KEY_MAX;
+	if (ioctl_perf->keys) {
+		char *keys = PERF_KEYS;
+
+		K_COPY_TO_USER(err, 0, (void *)ioctl_perf->keys,
+					 keys, strlen(keys) + 1);
+		if (err)
+			goto bail;
+	}
+	K_COPY_TO_USER(err, 0, param, ioctl_perf, sizeof(*ioctl_perf));
+bail:
+	return err;
+}
+
+static int fastrpc_get_dsp_info_legacy(struct fastrpc_ioctl_dsp_capabilities *dsp_cap,
+				void *param, struct fastrpc_file *fl)
+{
+	int err = 0;
+	struct fastrpc_ioctl_capability cap;
+	int i;
+
+	K_COPY_FROM_USER(err, 0, dsp_cap, param, sizeof(*dsp_cap));
+	if (err)
+		goto bail;
+	if (dsp_cap->domain >= NUM_CHANNELS) {
+		err = -ECHRNG;
+		goto bail;
+	}
+
+	cap.domain = dsp_cap->domain;
+	cap.attribute_ID = 0;
+	err = fastrpc_get_info_from_kernel(&cap, fl);
+	if (err)
+		goto bail;
+
+	dsp_cap->dsp_attributes[0] = 1;
+	for (i = 1; i < FASTRPC_MAX_DSP_ATTRIBUTES_LEGACY; i++) {
+		dsp_cap->dsp_attributes[i] = gcinfo[dsp_cap->domain].dsp_cap_kernel.dsp_attributes[i];
+	}
+	K_COPY_TO_USER(err, 0, param, dsp_cap, sizeof(*dsp_cap));
+bail:
+	return err;
+}
+
 union fastrpc_ioctl_param {
 	struct fastrpc_ioctl_invoke_async inv;
 	struct fastrpc_ioctl_mem_map mem_map;
@@ -6224,6 +6279,8 @@ union fastrpc_ioctl_param {
 	struct fastrpc_ioctl_control cp;
 	struct fastrpc_ioctl_capability cap;
 	struct fastrpc_ioctl_invoke2 inv2;
+	struct fastrpc_ioctl_perf perf;
+	struct fastrpc_ioctl_dsp_capabilities dsp_cap;
 };
 
 static inline int fastrpc_mmap_device_ioctl(struct fastrpc_file *fl,
@@ -6485,6 +6542,12 @@ static long fastrpc_device_ioctl(struct file *file, unsigned int ioctl_num,
 			if (!fastrpc_update_cdsp_support(fl))
 				isquerydone = true;
 		}
+		break;
+	case FASTRPC_IOCTL_GETPERF:
+		err = fastrpc_getperf(&p.perf, param, fl);
+		break;
+	case FASTRPC_IOCTL_GET_DSP_INFO_LEGACY:
+		err = fastrpc_get_dsp_info_legacy(&p.dsp_cap, param, fl);
 		break;
 	case FASTRPC_IOCTL_GET_DSP_INFO:
 		err = fastrpc_get_dsp_info(&p.cap, param, fl);
