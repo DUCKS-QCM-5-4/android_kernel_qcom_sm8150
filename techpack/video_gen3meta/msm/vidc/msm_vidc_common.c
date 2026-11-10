@@ -6029,7 +6029,7 @@ int msm_comm_check_memory_supported(struct msm_vidc_inst *vidc_inst)
 			"%s: video mem overshoot - reached %llu MB, max_limit %llu MB\n",
 			__func__, total_mem_size >> 20, memory_limit_mbytes);
 		msm_comm_print_mem_usage(core);
-		return -EBUSY;
+		return -ENOMEM;
 	}
 
 	if (!is_secure_session(vidc_inst)) {
@@ -6044,7 +6044,7 @@ int msm_comm_check_memory_supported(struct msm_vidc_inst *vidc_inst)
 				"%s: insufficient device addr space, required %llu, available %llu\n",
 				__func__, non_sec_mem_size, non_sec_cb_size);
 			msm_comm_print_mem_usage(core);
-			return -EINVAL;
+			return -ENOMEM;
 		}
 	}
 

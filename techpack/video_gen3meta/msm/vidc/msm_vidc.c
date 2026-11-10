@@ -377,9 +377,7 @@ int msm_vidc_qbuf(void *instance, struct media_device *mdev,
 	}
 
 	if (!IS_ALIGNED(b->m.planes[0].length, SZ_4K)) {
-		s_vpr_e(inst->sid, "qbuf: buffer size not 4K aligned - %u\n",
-			b->m.planes[0].length);
-		return -EINVAL;
+		b->m.planes[0].length = ALIGN(b->m.planes[0].length, SZ_4K);
 	}
 
 	q = msm_comm_get_vb2q(inst, b->type);

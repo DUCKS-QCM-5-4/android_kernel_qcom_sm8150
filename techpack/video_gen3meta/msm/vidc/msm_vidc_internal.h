@@ -31,6 +31,7 @@
 #define MIN_SUPPORTED_WIDTH 32
 #define MIN_SUPPORTED_HEIGHT 32
 #define DEFAULT_FPS 30
+#define FPS_24 24
 #define INVALID_FPS 0xFFFFFFFF
 #define MINIMUM_FPS 1
 #define MAXIMUM_FPS 960
@@ -40,6 +41,7 @@
 #define MAX_NUM_OUTPUT_BUFFERS VIDEO_MAX_FRAME // same as VB2_MAX_FRAME
 #define NUM_MBS_UHD (((3840 + 15) >> 4) * ((2160 + 15) >> 4))
 #define NUM_MBS_720p (((1280 + 15) >> 4) * ((720 + 15) >> 4))
+#define NUM_MBS_8K (((8192 + 15) >> 4) * ((4320 + 15) >> 4))
 
 #define MAX_SUPPORTED_INSTANCES 16
 #define MAX_SUPPORTED_INSTANCES_24 24

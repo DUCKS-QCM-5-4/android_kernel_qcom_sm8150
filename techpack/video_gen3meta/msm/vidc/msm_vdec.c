@@ -615,12 +615,22 @@ int msm_vdec_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 	struct msm_vidc_format *fmt = NULL;
 	struct msm_vidc_format_desc *fmt_desc = NULL;
 	struct v4l2_pix_format_mplane *mplane = NULL;
+	u32 height = 0;
+	u32 width = 0;
 	int rc = 0;
 	u32 color_format;
 
 	if (!inst || !f) {
 		d_vpr_e("%s: invalid parameters %pK %pK\n", __func__, inst, f);
 		return -EINVAL;
+	}
+
+	width = f->fmt.pix_mp.width;
+	height = f->fmt.pix_mp.height;
+	if ((get_v4l2_codec(inst) == V4L2_PIX_FMT_VP9) &&
+		(NUM_MBS_PER_FRAME(height, width) == NUM_MBS_8K) &&
+		(inst->clk_data.frame_rate >= (FPS_24 << 16))) {
+		inst->clk_data.frame_rate = FPS_24 << 16;
 	}
 
 	/*
